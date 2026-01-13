@@ -1,0 +1,279 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&family=Open+Sans:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Base Styles */
+@layer base {
+  html {
+    font-family: 'Open Sans', system-ui, sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Nunito', system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  /* Mobile touch targets */
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}
+
+/* Component Styles */
+@layer components {
+  /* Card Component - Trello Style */
+  .card {
+    @apply bg-white rounded-lg shadow-card border border-gray-200 p-4 hover:shadow-card-hover transition-all duration-200;
+  }
+
+  .card-task {
+    @apply card cursor-pointer select-none;
+  }
+
+  .card-task:hover {
+    @apply transform -translate-y-1;
+  }
+
+  /* Button Styles */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px];
+  }
+
+  .btn-primary {
+    @apply btn bg-trello-blue text-white hover:bg-trello-darkBlue focus:ring-trello-lightBlue;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200 focus:ring-gray-500;
+  }
+
+  .btn-success {
+    @apply btn bg-trello-green text-white hover:bg-green-600 focus:ring-green-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-trello-red text-white hover:bg-red-600 focus:ring-red-500;
+  }
+
+  .btn-sm {
+    @apply px-3 py-2 text-xs min-h-[36px];
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base min-h-[52px];
+  }
+
+  /* Input Styles */
+  .input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-trello-blue focus:border-transparent min-h-[44px];
+  }
+
+  .input-error {
+    @apply border-red-300 focus:ring-red-500;
+  }
+
+  /* Status Badges */
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-pending {
+    @apply status-badge bg-yellow-100 text-yellow-800;
+  }
+
+  .status-progress {
+    @apply status-badge bg-blue-100 text-blue-800;
+  }
+
+  .status-completed {
+    @apply status-badge bg-green-100 text-green-800;
+  }
+
+  .status-overdue {
+    @apply status-badge bg-red-100 text-red-800;
+  }
+
+  /* Column Styles - Trello Board */
+  .board-column {
+    @apply bg-gray-100 rounded-xl p-3 min-w-80 max-w-80;
+  }
+
+  .board-column-header {
+    @apply flex items-center justify-between mb-3 pb-2 border-b border-gray-300;
+  }
+
+  .board-column-title {
+    @apply font-semibold text-gray-800 text-sm uppercase tracking-wide;
+  }
+
+  .board-column-count {
+    @apply bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full;
+  }
+
+  /* Drag and Drop Styles */
+  .dragging {
+    @apply opacity-75 transform rotate-3;
+  }
+
+  .drag-over {
+    @apply bg-blue-50 border-2 border-dashed border-blue-300;
+  }
+
+  /* Mobile Responsive */
+  .mobile-hidden {
+    @apply hidden md:block;
+  }
+
+  .mobile-only {
+    @apply block md:hidden;
+  }
+
+  /* Loading Spinner */
+  .spinner {
+    @apply inline-block animate-spin rounded-full border-2 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite];
+  }
+
+  /* Toast Notifications */
+  .toast-success {
+    @apply bg-green-500 text-white;
+  }
+
+  .toast-error {
+    @apply bg-red-500 text-white;
+  }
+
+  .toast-info {
+    @apply bg-blue-500 text-white;
+  }
+
+  /* Avatar */
+  .avatar {
+    @apply inline-flex items-center justify-center rounded-full bg-trello-blue text-white font-medium;
+  }
+
+  .avatar-sm {
+    @apply avatar w-8 h-8 text-sm;
+  }
+
+  .avatar-md {
+    @apply avatar w-10 h-10 text-base;
+  }
+
+  .avatar-lg {
+    @apply avatar w-12 h-12 text-lg;
+  }
+
+  /* Progress Bar */
+  .progress-bar {
+    @apply w-full bg-gray-200 rounded-full h-2;
+  }
+
+  .progress-fill {
+    @apply h-2 rounded-full transition-all duration-300;
+  }
+}
+
+/* Utility Classes */
+@layer utilities {
+  /* Touch friendly spacing */
+  .touch-padding {
+    @apply p-4 md:p-6;
+  }
+
+  .touch-margin {
+    @apply m-4 md:m-6;
+  }
+
+  /* Safe area for mobile */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Scroll containers */
+  .scroll-container {
+    @apply overflow-auto;
+  }
+
+  .horizontal-scroll {
+    @apply overflow-x-auto overflow-y-hidden;
+  }
+
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Focus utilities for accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-trello-blue focus:ring-offset-2;
+  }
+
+  /* Animation utilities */
+  .animate-in {
+    @apply animate-fade-in;
+  }
+
+  .animate-slide {
+    @apply animate-slide-in;
+  }
+
+  /* Layout utilities */
+  .flex-center {
+    @apply flex items-center justify-center;
+  }
+
+  .absolute-center {
+    @apply absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2;
+  }
+}
+
+/* Dark mode support (for future) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles can be added here */
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
