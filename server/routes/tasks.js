@@ -150,12 +150,12 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
         throw new Error('User not assigned to this project or activity');
       }
 
-      // Crea task
+      // ✅ CREA TASK CON IL CAMPO creata_da AGGIUNTO
       const taskResult = await client.query(`
-        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, creata_da)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
-      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id]);
+      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, req.user.id]);
 
       const task = taskResult.rows[0];
 
