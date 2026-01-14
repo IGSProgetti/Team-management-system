@@ -6,7 +6,7 @@ const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({
       error: 'Validation Error',
-      details: errors.array().map(err => `${err.path}: ${err.msg}`).join(', ')
+      details: errors.array()
     });
   }
   next();
@@ -93,7 +93,7 @@ const validateProject = [
   handleValidationErrors
 ];
 
-// ✅ Validazioni per attività SENZA ore_stimate (ora automatiche!)
+// Validazioni per attività
 const validateActivity = [
   body('nome')
     .trim()
@@ -102,6 +102,9 @@ const validateActivity = [
   body('progetto_id')
     .isUUID()
     .withMessage('Valid project ID required'),
+  body('ore_stimate')
+    .isInt({ min: 1 })
+    .withMessage('Estimated hours must be a positive integer (in minutes)'),
   body('scadenza')
     .isISO8601()
     .withMessage('Due date must be valid ISO datetime'),
