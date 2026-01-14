@@ -1,144 +1,218 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Calendar, 
-  Clock, 
-  User, 
-  AlertTriangle,
-  CheckCircle2,
-  Filter,
-  Search,
-  MoreHorizontal,
-  X  // AGGIUNGI QUESTA RIGA
-} from 'lucide-react';
-import { useTasks } from '../../hooks';
-import { formatMinutesToHours, formatRelativeTime } from '../../utils/helpers';
+import { Plus, Search, Filter, Clock, User, Calendar, X } from 'lucide-react';
+import { useTasks, useAuth } from '../../hooks';
+import { activitiesAPI } from '../../utils/api';
 
+// Utility function for formatting - VERSIONE INTELLIGENTE
+const formatMinutesToHours = (minutes) => {
+  if (!minutes || minutes === 0) return '0min';
+  
+  // Per task sotto 60 minuti, mostra sempre in minuti
+  if (minutes < 60) {
+    return `${minutes}min`;
+  }
+  
+  // Per task di 60+ minuti, usa formato misto
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  
+  if (remainingMinutes === 0) {
+    // Ore esatte: formato semplice
+    return `${hours}h`;
+  } else {
+    // Formato misto: 1h 15min
+    return `${hours}h ${remainingMinutes}min`;
+  }
+};
+
+const formatDateTime = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// TaskCard Component
 const TaskCard = ({ task, onComplete, onEdit }) => {
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'urgent': return 'bg-red-100 text-red-800 border-red-200';
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'programmata': return 'bg-gray-100 text-gray-700';
+      case 'in_esecuzione': return 'bg-blue-100 text-blue-700';
+      case 'completata': return 'bg-green-100 text-green-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  // Logica per evidenziazione ritardi
+  const getOverdueBorderClass = () => {
+    if (task.stato === 'completata') return '';
+    
+    const today = new Date();
+    const taskDate = new Date(task.scadenza);
+    const diffTime = today - taskDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 3) {
+      // Scaduta da più di 3 giorni - Bordo rosso spesso
+      return 'border-red-500 border-2 bg-red-50';
+    } else if (diffDays >= 1 && diffDays <= 3) {
+      // Scaduta da 1-3 giorni - Bordo giallo spesso  
+      return 'border-yellow-500 border-2 bg-yellow-50';
+    } else if (diffDays === 0) {
+      // Scade oggi - Bordo arancione
+      return 'border-orange-400 border-2';
+    }
+    
+    return ''; // Nessuna evidenziazione per task future
+  };
+
   const isOverdue = new Date(task.scadenza) < new Date() && task.stato !== 'completata';
-  const isDueToday = new Date(task.scadenza).toDateString() === new Date().toDateString();
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer mb-3">
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="font-medium text-gray-900 text-sm leading-tight flex-1 pr-2">
-          {task.nome}
-        </h3>
-        <button className="text-gray-400 hover:text-gray-600 p-1">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
+    <div className={`card-task ${getOverdueBorderClass()}`}>
+      {/* Header con titolo e priorità */}
+      <div className="flex items-start justify-between mb-2">
+        <h3 className="font-medium text-gray-900 line-clamp-2 flex-1">{task.nome}</h3>
+        {task.priorita && (
+          <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(task.priorita)}`}>
+            {task.priorita}
+          </span>
+        )}
       </div>
 
+      {/* Descrizione */}
       {task.descrizione && (
-        <p className="text-xs text-gray-600 mb-3 line-clamp-3">
-          {task.descrizione}
-        </p>
+        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.descrizione}</p>
       )}
 
-      {/* Labels/Tags */}
-      <div className="flex flex-wrap gap-1 mb-3">
-        {isOverdue && (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            In Ritardo
-          </span>
-        )}
-        {isDueToday && !isOverdue && (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-            <Clock className="w-3 h-3 mr-1" />
-            Oggi
-          </span>
-        )}
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-          {task.ore_effettive && task.stato === 'completata' ? (
-            <>
-              <CheckCircle2 className="w-3 h-3 mr-1 text-green-600" />
-              {formatMinutesToHours(task.ore_effettive)} effettive
-            </>
-          ) : (
-            <>
-              <Clock className="w-3 h-3 mr-1" />
-              {formatMinutesToHours(task.ore_stimate)} stimate
-            </>
-          )}
+      {/* Info progetto/cliente */}
+      <div className="flex items-center text-xs text-gray-500 mb-2">
+        <span className="truncate">
+          {task.cliente_nome} • {task.progetto_nome}
         </span>
       </div>
 
-      {/* Differenza ore per task completate */}
-      {task.stato === 'completata' && task.ore_effettive && (
-        <div className="mb-3">
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-            task.ore_effettive === task.ore_stimate ? 'bg-yellow-100 text-yellow-800' :
-            task.ore_effettive > task.ore_stimate ? 'bg-red-100 text-red-800' :
-            'bg-green-100 text-green-800'
-          }`}>
-            Differenza: {task.ore_effettive === task.ore_stimate ? '±0' : 
-             task.ore_effettive > task.ore_stimate ? `+${task.ore_effettive - task.ore_stimate}` :
-             `${task.ore_effettive - task.ore_stimate}`} min
+      {/* Ore stimate vs effettive */}
+      <div className="flex items-center justify-between text-xs mb-2">
+        <div className="flex items-center text-gray-600">
+          <Clock className="w-3 h-3 mr-1" />
+          <span>Stimate: {formatMinutesToHours(task.ore_stimate)}</span>
+        </div>
+        {task.ore_effettive && (
+          <span className="text-gray-600">
+            Effettive: {formatMinutesToHours(task.ore_effettive)}
           </span>
-        </div>
-      )}
-
-      {/* Informazioni complete */}
-      <div className="mb-3 space-y-1">
-        <div className="text-xs text-gray-600">
-          <span className="font-medium">Attività:</span> {task.attivita_nome}
-        </div>
-        <div className="text-xs text-gray-600">
-          <span className="font-medium">Progetto:</span> {task.progetto_nome} • {task.cliente_nome}
-        </div>
+        )}
       </div>
 
-      {/* Meta Info */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <div className="flex items-center">
-          <Calendar className="w-3 h-3 mr-1" />
-          <span>{formatRelativeTime(task.scadenza)}</span>
-        </div>
-        <div className="flex items-center">
-          <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-medium">
-              {task.utente_nome?.charAt(0)?.toUpperCase() || 'U'}
+      {/* Performance indicator separato */}
+      {task.ore_effettive && (() => {
+        const differenza = task.ore_effettive - task.ore_stimate;
+        const percentualeScostamento = task.ore_stimate > 0 ? ((differenza / task.ore_stimate) * 100).toFixed(0) : 0;
+        
+        let colorClass, segno, testoDifferenza, percentualeClass, percentualeTesto;
+        
+        if (differenza < 0) {
+          // Sotto stima - Verde (efficiente)
+          colorClass = 'bg-green-100 text-green-700 border-green-200';
+          percentualeClass = 'text-green-600';
+          segno = '';
+          testoDifferenza = `${segno}${Math.abs(differenza)}min`;
+          percentualeTesto = `${percentualeScostamento}% sotto stima`;
+        } else if (differenza > 0) {
+          // Sopra stima - Rosso (inefficiente)  
+          colorClass = 'bg-red-100 text-red-700 border-red-200';
+          percentualeClass = 'text-red-600';
+          segno = '+';
+          testoDifferenza = `${segno}${differenza}min`;
+          percentualeTesto = `+${percentualeScostamento}% oltre stima`;
+        } else {
+          // Perfetto - Giallo (preciso)
+          colorClass = 'bg-yellow-100 text-yellow-700 border-yellow-200';
+          percentualeClass = 'text-yellow-600';
+          testoDifferenza = 'Perfetto!';
+          percentualeTesto = 'Stima precisa';
+        }
+        
+        return (
+          <div className="flex items-center justify-between text-xs mb-1">
+            {/* Banner colorato solo con i minuti */}
+            <span className={`px-2 py-1 text-xs font-medium rounded-full border ${colorClass}`}>
+              {testoDifferenza}
+            </span>
+            
+            {/* Percentuale separata con colore coordinato */}
+            <span className={`text-xs font-medium ${percentualeClass}`}>
+              {percentualeTesto}
             </span>
           </div>
-        </div>
+        );
+      })()}
+
+      {/* Scadenza */}
+      <div className={`flex items-center text-xs mb-3 ${isOverdue ? 'text-red-600' : 'text-gray-600'}`}>
+        <Calendar className="w-3 h-3 mr-1" />
+        <span>{formatDateTime(task.scadenza)}</span>
+        {isOverdue && <span className="ml-1 text-red-600 font-medium">• In ritardo</span>}
       </div>
 
-      {/* Project Info */}
-      <div className="mt-2 pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500">
-          {task.progetto_nome} • {task.cliente_nome}
+      {/* Utente assegnato */}
+      <div className="flex items-center text-xs text-gray-600 mb-3">
+        <User className="w-3 h-3 mr-1" />
+        <span>{task.utente_nome}</span>
+      </div>
+
+      {/* Azioni */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(task.stato)}`}>
+          {task.stato === 'programmata' ? 'Da Fare' :
+           task.stato === 'in_esecuzione' ? 'In Corso' : 'Completata'}
         </span>
-      </div>
-
-      {/* Action Buttons */}
-      {task.stato !== 'completata' && (
-        <div className="mt-3 flex gap-2">
-          {task.stato === 'programmata' && (
-            <button 
-              onClick={() => onEdit?.(task, 'in_esecuzione')}
-              className="flex-1 text-xs bg-blue-50 text-blue-600 py-2 rounded-md hover:bg-blue-100 transition-colors"
-            >
-              Inizia
-            </button>
-          )}
-          {task.stato === 'in_esecuzione' && (
-            <button 
-              onClick={() => onComplete?.(task)}
-              className="flex-1 text-xs bg-green-50 text-green-600 py-2 rounded-md hover:bg-green-100 transition-colors flex items-center justify-center"
-            >
-              <CheckCircle2 className="w-3 h-3 mr-1" />
-              Completa
-            </button>
+        
+        <div className="flex gap-1">
+          {task.stato !== 'completata' && (
+            <>
+              {task.stato === 'programmata' && (
+                <button
+                  onClick={() => onEdit(task, 'in_esecuzione')}
+                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Inizia
+                </button>
+              )}
+              {task.stato === 'in_esecuzione' && (
+                <button
+                  onClick={() => onComplete(task)}
+                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  Completa
+                </button>
+              )}
+            </>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
 
-const KanbanColumn = ({ title, tasks, status, count, onAddTask, children }) => {
-  const getColumnColor = () => {
+// KanbanColumn Component
+const KanbanColumn = ({ title, status, tasks, count, onAddTask, children }) => {
+  const getColumnColor = (status) => {
     switch (status) {
       case 'programmata': return 'border-gray-300 bg-gray-50';
       case 'in_esecuzione': return 'border-blue-300 bg-blue-50';
@@ -148,14 +222,12 @@ const KanbanColumn = ({ title, tasks, status, count, onAddTask, children }) => {
   };
 
   return (
-    <div className={`rounded-xl border-2 p-4 min-h-96 ${getColumnColor()}`}>
-      {/* Column Header */}
+    <div className={`rounded-lg border-2 ${getColumnColor(status)} p-4 h-full`}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
-            {title}
-          </h3>
-          <span className="ml-2 bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900">{title}</h3>
+          <span className="bg-white px-2 py-1 rounded-full text-sm font-medium text-gray-600">
             {count}
           </span>
         </div>
@@ -172,7 +244,7 @@ const KanbanColumn = ({ title, tasks, status, count, onAddTask, children }) => {
         {children}
       </div>
 
-      {/* Add Task Button */}
+      {/* Add Task Button - FIX: Abilita sempre onAddTask */}
       <button 
         onClick={() => onAddTask?.(status)}
         className="w-full mt-3 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors text-sm flex items-center justify-center"
@@ -184,27 +256,72 @@ const KanbanColumn = ({ title, tasks, status, count, onAddTask, children }) => {
   );
 };
 
+// CompleteTaskModal Component - CON DOPPIA MODALITÀ
 const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
-  const [hoursWorked, setHoursWorked] = useState('');
+  const [inputMode, setInputMode] = useState('minutes'); // 'hours' o 'minutes'
+  const [hoursValue, setHoursValue] = useState('');
+  const [minutesValue, setMinutesValue] = useState('');
   const [error, setError] = useState('');
+
+  // Reset valori quando cambia il task o si apre il modal
+  useEffect(() => {
+    if (isOpen && task) {
+      setHoursValue('');
+      setMinutesValue('');
+      setError('');
+      // Suggerisci modalità in base alle ore stimate
+      setInputMode(task.ore_stimate < 60 ? 'minutes' : 'hours');
+    }
+  }, [isOpen, task]);
 
   if (!isOpen || !task) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!hoursWorked.trim()) {
-      setError('Inserisci le ore lavorate');
-      return;
+    let totalMinutes = 0;
+    
+    if (inputMode === 'hours') {
+      if (!hoursValue.trim()) {
+        setError('Inserisci le ore lavorate');
+        return;
+      }
+      
+      const hours = parseFloat(hoursValue);
+      if (isNaN(hours) || hours <= 0) {
+        setError('Inserisci un numero valido di ore');
+        return;
+      }
+      
+      totalMinutes = Math.round(hours * 60);
+    } else {
+      if (!minutesValue.trim()) {
+        setError('Inserisci i minuti lavorati');
+        return;
+      }
+      
+      const minutes = parseInt(minutesValue);
+      if (isNaN(minutes) || minutes <= 0) {
+        setError('Inserisci un numero valido di minuti');
+        return;
+      }
+      
+      totalMinutes = minutes;
     }
 
-    const minutes = parseFloat(hoursWorked) * 60;
-    if (isNaN(minutes) || minutes <= 0) {
-      setError('Inserisci un numero valido di ore');
-      return;
-    }
+    onConfirm(task.id, totalMinutes);
+  };
 
-    onConfirm(task.id, Math.round(minutes));
+  // Conversione real-time per mostrare l'equivalente
+  const getConvertedValue = () => {
+    if (inputMode === 'hours' && hoursValue) {
+      const minutes = Math.round(parseFloat(hoursValue || 0) * 60);
+      return `≈ ${minutes}min`;
+    } else if (inputMode === 'minutes' && minutesValue) {
+      const hours = (parseInt(minutesValue || 0) / 60).toFixed(2);
+      return `≈ ${hours}h`;
+    }
+    return '';
   };
 
   return (
@@ -220,27 +337,98 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {/* Toggle Modalità Input */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
               Ore Effettive Lavorate *
             </label>
-            <input
-              type="number"
-              step="0.25"
-              min="0.25"
-              value={hoursWorked}
-              onChange={(e) => {
-                setHoursWorked(e.target.value);
-                setError('');
-              }}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="es: 2.5"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Inserisci le ore effettivamente lavorate su questa task
-            </p>
-            {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
+            
+            {/* Radio buttons per modalità */}
+            <div className="flex items-center gap-4 mb-3">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="hours"
+                  checked={inputMode === 'hours'}
+                  onChange={(e) => setInputMode(e.target.value)}
+                  className="mr-2"
+                />
+                <span className="text-sm">Ore</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="minutes"
+                  checked={inputMode === 'minutes'}
+                  onChange={(e) => setInputMode(e.target.value)}
+                  className="mr-2"
+                />
+                <span className="text-sm">Minuti</span>
+              </label>
+            </div>
+
+            {/* Input basato sulla modalità */}
+            {inputMode === 'hours' ? (
+              <div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={hoursValue}
+                  onChange={(e) => {
+                    setHoursValue(e.target.value);
+                    setError('');
+                  }}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="es: 2.5"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Inserisci le ore in formato decimale (es: 1.5 = 1h 30min)
+                </p>
+              </div>
+            ) : (
+              <div>
+                <input
+                  type="number"
+                  min="1"
+                  value={minutesValue}
+                  onChange={(e) => {
+                    setMinutesValue(e.target.value);
+                    setError('');
+                  }}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="es: 45"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Inserisci i minuti esatti (1, 5, 15, 30, 45...)
+                </p>
+                
+                {/* Preset comuni per minuti */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[1, 5, 10, 15, 30, 45, 60, 90, 120].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setMinutesValue(preset.toString())}
+                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                    >
+                      {preset}min
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Conversione real-time */}
+            {getConvertedValue() && (
+              <p className="text-xs text-blue-600 mt-2 font-medium">
+                {getConvertedValue()}
+              </p>
+            )}
+
+            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
           </div>
 
           <div className="flex gap-3">
@@ -264,55 +452,99 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
   );
 };
 
+// CreateTaskModal Component - VERSIONE CON FALLBACK E CREAZIONE DINAMICA
 const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
+  const { user } = useAuth(); // Utente corrente
   const [formData, setFormData] = useState({
     nome: '',
     descrizione: '',
     ore_stimate: '',
+    stimate_mode: 'minutes', // Nuovo campo per modalità input
     scadenza_data: '',
     scadenza_ora: '',
-    attivita_nome: '',
+    attivita_id: '', // Campo per l'attività selezionata
+    priorita: 'medium',
+    // FALLBACK: Campi per creazione al volo se non ci sono attività
     progetto_nome: 'Sistema Management',
-    cliente_nome: 'Acme Corporation',
-    priorita: 'medium'
+    cliente_nome: 'Acme Corporation'
   });
+  
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableActivities, setAvailableActivities] = useState([]); // Attività disponibili
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [showCreateOnTheFly, setShowCreateOnTheFly] = useState(false); // Modal per creazione al volo
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: null }));
+  // Carica attività disponibili quando si apre il modal
+  useEffect(() => {
+    if (isOpen) {
+      loadAvailableActivities();
+    }
+  }, [isOpen]);
+
+  const loadAvailableActivities = async () => {
+    setLoadingActivities(true);
+    try {
+      const response = await activitiesAPI.getActivities();
+      setAvailableActivities(response.data.activities || []);
+      
+      // Se non ci sono attività, abilita la modalità "creazione al volo"
+      if (!response.data.activities || response.data.activities.length === 0) {
+        setShowCreateOnTheFly(true);
+      }
+    } catch (error) {
+      console.error('Errore nel caricamento attività:', error);
+      // Fallback: abilita creazione al volo
+      setShowCreateOnTheFly(true);
+    } finally {
+      setLoadingActivities(false);
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.nome.trim()) {
-      newErrors.nome = 'Nome task richiesto';
+      newErrors.nome = 'Il nome è obbligatorio';
     }
-    
-    if (!formData.ore_stimate || formData.ore_stimate <= 0) {
-      newErrors.ore_stimate = 'Ore stimate richieste (maggiori di 0)';
+
+    if (!formData.ore_stimate || parseFloat(formData.ore_stimate) <= 0) {
+      newErrors.ore_stimate = 'Inserisci ore/minuti validi';
     }
-    
+
     if (!formData.scadenza_data) {
-      newErrors.scadenza_data = 'Data scadenza richiesta';
+      newErrors.scadenza_data = 'La data di scadenza è obbligatoria';
     }
-    
+
     if (!formData.scadenza_ora) {
-      newErrors.scadenza_ora = 'Ora scadenza richiesta';
+      newErrors.scadenza_ora = 'L\'orario di scadenza è obbligatorio';
     }
-    
-    if (!formData.attivita_nome.trim()) {
-      newErrors.attivita_nome = 'Nome attività richiesto';
+
+    // Validazione diversa a seconda se ci sono attività o modalità creazione
+    if (!showCreateOnTheFly && !formData.attivita_id) {
+      newErrors.attivita_id = 'Seleziona un\'attività';
     }
-    
+
+    if (showCreateOnTheFly && !formData.cliente_nome.trim()) {
+      newErrors.cliente_nome = 'Il cliente è obbligatorio';
+    }
+
+    if (showCreateOnTheFly && !formData.progetto_nome.trim()) {
+      newErrors.progetto_nome = 'Il progetto è obbligatorio';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Rimuovi errore se l'utente ha corretto
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -323,27 +555,57 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     setIsSubmitting(true);
     
     try {
-      const scadenza = `${formData.scadenza_data}T${formData.scadenza_ora}:00Z`;
+      // Conversione ore stimate in minuti
+      let oreStimateInMinuti;
+      if (formData.stimate_mode === 'hours') {
+        oreStimateInMinuti = Math.round(parseFloat(formData.ore_stimate) * 60);
+      } else {
+        oreStimateInMinuti = parseInt(formData.ore_stimate);
+      }
+
+      let taskData;
+
+      if (showCreateOnTheFly) {
+        // MODALITÀ CREAZIONE AL VOLO: Crea cliente/progetto/attività automaticamente
+        taskData = {
+          nome: formData.nome,
+          descrizione: formData.descrizione,
+          ore_stimate: oreStimateInMinuti, // Sempre in minuti al backend
+          scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
+          utente_assegnato: user.id,
+          // Dati per creazione al volo (il backend dovrà gestirli)
+          create_on_the_fly: true,
+          cliente_nome: formData.cliente_nome,
+          progetto_nome: formData.progetto_nome,
+          attivita_nome: `Attività per ${formData.nome}` // Genera nome attività
+        };
+      } else {
+        // MODALITÀ NORMALE: Usa attività esistente
+        taskData = {
+          nome: formData.nome,
+          descrizione: formData.descrizione,
+          ore_stimate: oreStimateInMinuti, // Sempre in minuti al backend
+          scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
+          attivita_id: formData.attivita_id,
+          utente_assegnato: user.id,
+        };
+      }
       
-      const taskData = {
-        ...formData,
-        scadenza,
-        ore_stimate: parseFloat(formData.ore_stimate) * 60,
-        stato: 'programmata'
-      };
-      
+      // Chiama la funzione del parent
       await onSubmit(taskData);
       
+      // Reset form dopo successo
       setFormData({
         nome: '',
         descrizione: '',
         ore_stimate: '',
+        stimate_mode: 'minutes',
         scadenza_data: '',
         scadenza_ora: '',
-        attivita_nome: '',
+        attivita_id: '',
+        priorita: 'medium',
         progetto_nome: 'Sistema Management',
-        cliente_nome: 'Acme Corporation',
-        priorita: 'medium'
+        cliente_nome: 'Acme Corporation'
       });
       
       onClose();
@@ -369,6 +631,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
 
           <div className="p-6 space-y-6">
+            {/* Nome Task */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Nome Task *</label>
               <input
@@ -383,6 +646,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
             </div>
 
+            {/* Descrizione */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Descrizione</label>
               <textarea
@@ -395,22 +659,190 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               />
             </div>
 
+            {/* SEZIONE ATTIVITÀ O CREAZIONE AL VOLO */}
+            {!showCreateOnTheFly ? (
+              // MODALITÀ NORMALE: Select attività esistente
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Attività *</label>
+                {loadingActivities ? (
+                  <div className="flex items-center px-3 py-2 border border-gray-300 rounded-lg">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
+                    <span className="text-gray-500">Caricamento attività...</span>
+                  </div>
+                ) : (
+                  <select
+                    name="attivita_id"
+                    value={formData.attivita_id}
+                    onChange={handleInputChange}
+                    className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.attivita_id ? 'border-red-300' : 'border-gray-300'}`}
+                  >
+                    <option value="">Seleziona attività...</option>
+                    {availableActivities.map((activity) => (
+                      <option key={activity.id} value={activity.id}>
+                        {activity.nome} - {activity.progetto_nome} ({activity.cliente_nome})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {errors.attivita_id && <p className="text-sm text-red-600 mt-1">{errors.attivita_id}</p>}
+                
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-xs text-gray-500">
+                    Task assegnata a: <strong>{user?.nome}</strong>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateOnTheFly(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Crea nuova attività al volo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // MODALITÀ CREAZIONE AL VOLO: Campi cliente/progetto
+              <>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Modalità Creazione Rapida:</strong> Cliente, progetto e attività verranno creati automaticamente.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cliente *</label>
+                    <input
+                      type="text"
+                      name="cliente_nome"
+                      value={formData.cliente_nome}
+                      onChange={handleInputChange}
+                      className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.cliente_nome ? 'border-red-300' : 'border-gray-300'}`}
+                      placeholder="Nome cliente"
+                    />
+                    {errors.cliente_nome && <p className="text-sm text-red-600 mt-1">{errors.cliente_nome}</p>}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Progetto *</label>
+                    <input
+                      type="text"
+                      name="progetto_nome"
+                      value={formData.progetto_nome}
+                      onChange={handleInputChange}
+                      className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.progetto_nome ? 'border-red-300' : 'border-gray-300'}`}
+                      placeholder="Nome progetto"
+                    />
+                    {errors.progetto_nome && <p className="text-sm text-red-600 mt-1">{errors.progetto_nome}</p>}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-500">
+                    Task assegnata a: <strong>{user?.nome}</strong>
+                  </p>
+                  {availableActivities.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateOnTheFly(false)}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Usa attività esistente
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Ore Stimate con doppia modalità */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Ore Stimate *</label>
-                <input
-                  type="number"
-                  step="0.25"
-                  min="0.25"
-                  name="ore_stimate"
-                  value={formData.ore_stimate}
-                  onChange={handleInputChange}
-                  className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
-                  placeholder="es: 2.5"
-                />
+                
+                {/* Toggle modalità per ore stimate */}
+                <div className="flex items-center gap-3 mb-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="stimate_mode"
+                      value="hours"
+                      checked={formData.stimate_mode === 'hours'}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        stimate_mode: e.target.value,
+                        ore_stimate: '' // Reset valore
+                      }))}
+                      className="mr-1"
+                    />
+                    <span className="text-xs">Ore</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="stimate_mode"
+                      value="minutes"
+                      checked={formData.stimate_mode === 'minutes'}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        stimate_mode: e.target.value,
+                        ore_stimate: '' // Reset valore
+                      }))}
+                      className="mr-1"
+                    />
+                    <span className="text-xs">Min</span>
+                  </label>
+                </div>
+
+                {formData.stimate_mode === 'hours' ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    name="ore_stimate"
+                    value={formData.ore_stimate}
+                    onChange={handleInputChange}
+                    className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
+                    placeholder="es: 2.5"
+                  />
+                ) : (
+                  <div>
+                    <input
+                      type="number"
+                      min="1"
+                      name="ore_stimate"
+                      value={formData.ore_stimate}
+                      onChange={handleInputChange}
+                      className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
+                      placeholder="es: 45"
+                    />
+                    {/* Preset comuni per minuti */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {[5, 15, 30, 45, 60, 90, 120].map(preset => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, ore_stimate: preset.toString() }))}
+                          className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                        >
+                          {preset}min
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conversione real-time */}
+                {formData.ore_stimate && (
+                  <p className="text-xs text-blue-600 mt-1 font-medium">
+                    {formData.stimate_mode === 'hours' 
+                      ? `≈ ${Math.round(parseFloat(formData.ore_stimate || 0) * 60)}min`
+                      : `≈ ${(parseInt(formData.ore_stimate || 0) / 60).toFixed(2)}h`
+                    }
+                  </p>
+                )}
+
                 {errors.ore_stimate && <p className="text-sm text-red-600 mt-1">{errors.ore_stimate}</p>}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Priorità</label>
                 <select
@@ -419,14 +851,15 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                   onChange={handleInputChange}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="low">🟢 Bassa</option>
-                  <option value="medium">🟡 Media</option>
-                  <option value="high">🟠 Alta</option>
-                  <option value="urgent">🔴 Urgente</option>
+                  <option value="low">Bassa</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                  <option value="urgent">Urgente</option>
                 </select>
               </div>
             </div>
 
+            {/* Data e Ora Scadenza */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Data Scadenza *</label>
@@ -436,11 +869,11 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                   value={formData.scadenza_data}
                   onChange={handleInputChange}
                   className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.scadenza_data ? 'border-red-300' : 'border-gray-300'}`}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={new Date().toISOString().split('T')[0]} // Non permettere date passate
                 />
                 {errors.scadenza_data && <p className="text-sm text-red-600 mt-1">{errors.scadenza_data}</p>}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Ora Scadenza *</label>
                 <input
@@ -453,52 +886,23 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                 {errors.scadenza_ora && <p className="text-sm text-red-600 mt-1">{errors.scadenza_ora}</p>}
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Attività *</label>
-              <input
-                type="text"
-                name="attivita_nome"
-                value={formData.attivita_nome}
-                onChange={handleInputChange}
-                className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.attivita_nome ? 'border-red-300' : 'border-gray-300'}`}
-                placeholder="es: Sviluppo Frontend"
-              />
-              {errors.attivita_nome && <p className="text-sm text-red-600 mt-1">{errors.attivita_nome}</p>}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Progetto</label>
-                <input
-                  type="text"
-                  name="progetto_nome"
-                  value={formData.progetto_nome}
-                  onChange={handleInputChange}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nome progetto"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
-                <input
-                  type="text"
-                  name="cliente_nome"
-                  value={formData.cliente_nome}
-                  onChange={handleInputChange}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nome cliente"
-                />
-              </div>
-            </div>
           </div>
 
+          {/* Pulsanti */}
           <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50" disabled={isSubmitting}>
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50" 
+              disabled={isSubmitting}
+            >
               Annulla
             </button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" disabled={isSubmitting}>
+            <button 
+              type="submit" 
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50" 
+              disabled={isSubmitting || loadingActivities}
+            >
               {isSubmitting ? (
                 <div className="flex items-center">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -518,6 +922,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
+// Main TasksPage Component
 const TasksPage = () => {
   const { tasks, summary, isLoading, completeTask, updateTask, createTask } = useTasks();
   const [searchTerm, setSearchTerm] = useState('');
@@ -525,12 +930,88 @@ const TasksPage = () => {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Nuovi stati per filtri temporali
+  const [activeTimeFilters, setActiveTimeFilters] = useState({
+    today: false,
+    thisWeek: false,
+    thisMonth: false
+  });
 
   // Group tasks by status
   const tasksByStatus = {
     programmata: tasks.filter(task => task.stato === 'programmata'),
     in_esecuzione: tasks.filter(task => task.stato === 'in_esecuzione'),
     completata: tasks.filter(task => task.stato === 'completata')
+  };
+
+  // Helper functions per filtri temporali
+  const isToday = (date) => {
+    const today = new Date();
+    const taskDate = new Date(date);
+    return today.toDateString() === taskDate.toDateString();
+  };
+
+  const isThisWeek = (date) => {
+    const today = new Date();
+    const taskDate = new Date(date);
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    return taskDate >= startOfWeek && taskDate <= endOfWeek;
+  };
+
+  const isThisMonth = (date) => {
+    const today = new Date();
+    const taskDate = new Date(date);
+    return today.getMonth() === taskDate.getMonth() && today.getFullYear() === taskDate.getFullYear();
+  };
+
+  // Funzione per applicare filtri temporali (cumulativi)
+  const applyTimeFilters = (taskList) => {
+    // Se nessun filtro è attivo, mostra tutte le task (escluse quelle completate)
+    if (!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) {
+      return taskList.filter(task => task.stato !== 'completata');
+    }
+
+    return taskList.filter(task => {
+      // Escludi sempre le task completate
+      if (task.stato === 'completata') return false;
+
+      const matchesToday = activeTimeFilters.today && isToday(task.scadenza);
+      const matchesThisWeek = activeTimeFilters.thisWeek && isThisWeek(task.scadenza);
+      const matchesThisMonth = activeTimeFilters.thisMonth && isThisMonth(task.scadenza);
+
+      // Logica cumulativa: se più filtri sono attivi, la task deve soddisfare ALMENO UNO
+      return matchesToday || matchesThisWeek || matchesThisMonth;
+    });
+  };
+
+  // Applica filtri temporali alle task
+  const filteredTasks = applyTimeFilters(tasks);
+
+  // Group filtered tasks by status
+  const filteredTasksByStatus = {
+    programmata: filteredTasks.filter(task => task.stato === 'programmata'),
+    in_esecuzione: filteredTasks.filter(task => task.stato === 'in_esecuzione'),
+    completata: [] // Sempre vuoto perché escludiamo le completate nei filtri
+  };
+
+  // Toggle filtro temporale
+  const toggleTimeFilter = (filterType) => {
+    setActiveTimeFilters(prev => ({
+      ...prev,
+      [filterType]: !prev[filterType]
+    }));
+  };
+
+  // Reset tutti i filtri
+  const resetTimeFilters = () => {
+    setActiveTimeFilters({
+      today: false,
+      thisWeek: false,
+      thisMonth: false
+    });
   };
 
   // Handle task completion
@@ -545,25 +1026,29 @@ const TasksPage = () => {
     setSelectedTask(null);
   };
 
+  // IMPLEMENTAZIONE CORRETTA: handleCreateTask
   const handleCreateTask = async (taskData) => {
-  console.log('Creating task:', taskData);
-  // Qui chiameremo l'API per creare la task
-};
+    console.log('Creating task:', taskData);
+    
+    // Chiamata corretta all'API (senza .mutateAsync)
+    createTask(taskData);
+    // Il modal si chiude automaticamente nel componente CreateTaskModal
+  };
 
   const handleStatusChange = (task, newStatus) => {
-  // Aggiorna immediatamente la UI
-  const updatedTasks = tasks.map(t => 
-    t.id === task.id ? { ...t, stato: newStatus } : t
-  );
-  
-  // Chiama l'API per persistere il cambiamento
-  updateTask({ 
-    taskId: task.id, 
-    data: { stato: newStatus } 
-  });
-  
-  console.log(`📝 Task "${task.nome}" spostata in: ${newStatus}`);
-};
+    // Aggiorna immediatamente la UI
+    const updatedTasks = tasks.map(t => 
+      t.id === task.id ? { ...t, stato: newStatus } : t
+    );
+    
+    // Chiama l'API per persistere il cambiamento
+    updateTask({ 
+      taskId: task.id, 
+      data: { stato: newStatus } 
+    });
+    
+    console.log(`📝 Task "${task.nome}" spostata in: ${newStatus}`);
+  };
 
   if (isLoading) {
     return (
@@ -587,6 +1072,53 @@ const TasksPage = () => {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {/* Time Filters */}
+            <div className="flex items-center gap-2 border-r border-gray-300 pr-3">
+              <button
+                onClick={resetTimeFilters}
+                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                  !activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                Tutte
+              </button>
+              
+              <button
+                onClick={() => toggleTimeFilter('today')}
+                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTimeFilters.today
+                    ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                Oggi
+              </button>
+              
+              <button
+                onClick={() => toggleTimeFilter('thisWeek')}
+                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTimeFilters.thisWeek
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                Settimana
+              </button>
+              
+              <button
+                onClick={() => toggleTimeFilter('thisMonth')}
+                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTimeFilters.thisMonth
+                    ? 'bg-green-100 text-green-700 border border-green-200'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                Mese
+              </button>
+            </div>
+
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -607,9 +1139,9 @@ const TasksPage = () => {
 
             {/* Add Task */}
             <button 
-  onClick={() => setShowCreateModal(true)}
-  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
->
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Nuova Task</span>
             </button>
@@ -625,11 +1157,11 @@ const TasksPage = () => {
             <KanbanColumn
               title="Da Fare"
               status="programmata"
-              tasks={tasksByStatus.programmata}
-              count={tasksByStatus.programmata.length}
-              onAddTask={() => setShowCreateModal(true)}
+              tasks={filteredTasksByStatus.programmata}
+              count={filteredTasksByStatus.programmata.length}
+              onAddTask={() => setShowCreateModal(true)} // FIX: Collega sempre al modal
             >
-              {tasksByStatus.programmata.map((task) => (
+              {filteredTasksByStatus.programmata.map((task) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -644,11 +1176,11 @@ const TasksPage = () => {
             <KanbanColumn
               title="In Corso"
               status="in_esecuzione"
-              tasks={tasksByStatus.in_esecuzione}
-              count={tasksByStatus.in_esecuzione.length}
-              onAddTask={(status) => console.log('Add task for status:', status)}
+              tasks={filteredTasksByStatus.in_esecuzione}
+              count={filteredTasksByStatus.in_esecuzione.length}
+              onAddTask={() => setShowCreateModal(true)} // FIX: Collega al modal
             >
-              {tasksByStatus.in_esecuzione.map((task) => (
+              {filteredTasksByStatus.in_esecuzione.map((task) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -659,21 +1191,32 @@ const TasksPage = () => {
             </KanbanColumn>
           </div>
 
-          {/* Completate Column */}
+          {/* Completate Column - Mostra sempre vuota quando i filtri sono attivi */}
           <div className="w-80 flex-shrink-0">
             <KanbanColumn
               title="Completate"
               status="completata"
-              tasks={tasksByStatus.completata}
-              count={tasksByStatus.completata.length}
-              onAddTask={(status) => console.log('Add task for status:', status)}
+              tasks={tasksByStatus.completata} // Usa tasksByStatus originale solo per il conteggio
+              count={activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth ? 0 : tasksByStatus.completata.length}
+              onAddTask={() => setShowCreateModal(true)} // FIX: Collega al modal
             >
-              {tasksByStatus.completata.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                />
-              ))}
+              {/* Mostra task completate solo se nessun filtro temporale è attivo */}
+              {(!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) && 
+                tasksByStatus.completata.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                  />
+                ))
+              }
+              
+              {/* Messaggio quando i filtri temporali sono attivi */}
+              {(activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth) && (
+                <div className="text-center text-gray-500 text-sm py-8">
+                  <p>Le task completate sono</p>
+                  <p>nascoste nei filtri temporali</p>
+                </div>
+              )}
             </KanbanColumn>
           </div>
         </div>
@@ -690,7 +1233,7 @@ const TasksPage = () => {
         onConfirm={handleConfirmComplete}
       />
 
-      {/* Create Task Modal */}
+      {/* Create Task Modal - VERSIONE CON FALLBACK */}
       <CreateTaskModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
