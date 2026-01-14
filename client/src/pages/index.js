@@ -9,15 +9,6 @@ export const RegisterPage = () => (
   </div>
 );
 
-export const ActivitiesPage = () => (
-  <div>
-    <h1 className="text-2xl font-bold mb-6">Attività</h1>
-    <div className="bg-white rounded-lg shadow p-6">
-      <p>Gestione attività - In sviluppo</p>
-    </div>
-  </div>
-);
-
 export const ProjectsPage = () => (
   <div>
     <h1 className="text-2xl font-bold mb-6">Progetti</h1>
@@ -62,3 +53,6 @@ export const UsersPage = () => (
     </div>
   </div>
 );
+
+// Import della nuova pagina Attività
+export { default as ActivitiesPage } from './Activities/ActivitiesPage';
