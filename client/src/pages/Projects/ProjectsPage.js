@@ -120,12 +120,34 @@ const ProjectsPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filters, setFilters] = useState({});
 
-  const { projects, isLoading: projectsLoading } = useProjects(filters);
-  const { clients, isLoading: clientsLoading } = useClients();
+  // Fetch progetti da API
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch('/api/projects', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        setProjects(data.projects || []);
+      } catch (error) {
+        console.error('Errore fetch progetti:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
 
   const isManager = user?.ruolo === 'manager';
 
-  if (projectsLoading || clientsLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -205,7 +227,7 @@ const ProjectsPage = () => {
             </div>
             <div className="ml-4">
               <div className="text-2xl font-bold text-purple-900">
-                {formatCurrency(projects.reduce((sum, p) => sum + (p.budget_assegnato || 0), 0))}
+                {formatCurrency(projects.reduce((sum, p) => sum + (Number(p.budget_assegnato) || 0), 0))}
               </div>
               <div className="text-sm text-purple-600">Budget Totale</div>
             </div>

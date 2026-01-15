@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Plus, Calendar, Clock, Users, BarChart3, Filter, Search,
   AlertTriangle, CheckCircle, Circle, PlayCircle, ChevronDown,
-  ChevronUp, User, Timer, Target, Calculator, Zap
+  ChevronUp, User, Timer, Target, Calculator, Zap, X
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
 import { useActivities, useProjects, useTasks } from '../../hooks';
@@ -39,6 +39,234 @@ const getStatusIcon = (stato) => {
     case 'programmata': return <Circle className="w-4 h-4" />;
     default: return <Circle className="w-4 h-4" />;
   }
+};
+
+// CreateTaskForm Component
+const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    nome: '',
+    descrizione: '',
+    attivita_id: activityId,
+    utente_assegnato: '',
+    ore_stimate: '',
+    scadenza: ''
+  });
+  const [errors, setErrors] = useState({});
+  
+  const { users, isLoading: usersLoading } = useUsers();
+  const { createTask, isCreating } = useTasks();
+  
+  // Filtra solo le risorse
+  const availableUsers = users.filter(user => user.ruolo === 'risorsa');
+  
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.nome.trim()) {
+      newErrors.nome = 'Nome task obbligatorio';
+    }
+    
+    if (!formData.utente_assegnato) {
+      newErrors.utente_assegnato = 'Utente assegnato obbligatorio';
+    }
+    
+    if (!formData.scadenza) {
+      newErrors.scadenza = 'Scadenza obbligatoria';
+    } else if (new Date(formData.scadenza) <= new Date()) {
+      newErrors.scadenza = 'Scadenza deve essere futura';
+    }
+    
+    // ✅ RENDI OBBLIGATORIE LE ORE STIMATE (come nel TasksPage esistente)
+    if (!formData.ore_stimate || formData.ore_stimate <= 0) {
+      newErrors.ore_stimate = 'Ore stimate obbligatorie (minimo 0.5 ore)';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Costruisci i dati esattamente come nel TasksPage esistente
+    const submitData = {
+      nome: formData.nome,
+      descrizione: formData.descrizione,
+      attivita_id: formData.attivita_id,
+      utente_assegnato: formData.utente_assegnato,
+      ore_stimate: parseInt(formData.ore_stimate) * 60, // Converti ore in minuti
+      scadenza: formData.scadenza
+    };
+    
+    console.log('🔧 DEBUG - Dati finali inviati:', submitData);
+    
+    createTask(submitData, {
+      onSuccess: () => {
+        console.log('🔧 DEBUG - Task creata con successo!');
+        onSuccess();
+      },
+      onError: (error) => {
+        console.error('🔧 DEBUG - Errore creazione task:', error);
+        console.error('🔧 DEBUG - Response data:', error.response?.data);
+      }
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        
+        {/* Header Modal */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Task</h3>
+              <p className="text-sm text-gray-500 mt-1">Attività: {activityName}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        {/* Form Content */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          
+          {/* Nome Task */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nome Task *
+            </label>
+            <input
+              type="text"
+              value={formData.nome}
+              onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.nome ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="Es: Implementare componente login"
+            />
+            {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
+          </div>
+
+          {/* Utente Assegnato */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Utente Assegnato *
+            </label>
+            {usersLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="ml-2 text-sm text-gray-600">Caricamento utenti...</span>
+              </div>
+            ) : (
+              <select
+                value={formData.utente_assegnato}
+                onChange={(e) => setFormData(prev => ({ ...prev, utente_assegnato: e.target.value }))}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.utente_assegnato ? 'border-red-300' : 'border-gray-300'
+                }`}
+              >
+                <option value="">Seleziona utente...</option>
+                {availableUsers.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.nome} ({user.email})
+                  </option>
+                ))}
+              </select>
+            )}
+            {errors.utente_assegnato && <p className="mt-1 text-sm text-red-600">{errors.utente_assegnato}</p>}
+          </div>
+
+          {/* Ore Stimate - OBBLIGATORIE */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ore Stimate *
+            </label>
+            <input
+              type="number"
+              min="0.5"
+              step="0.5"
+              value={formData.ore_stimate}
+              onChange={(e) => setFormData(prev => ({ ...prev, ore_stimate: e.target.value }))}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.ore_stimate ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="Es: 2.5"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Le ore effettive saranno inserite al completamento della task
+            </p>
+            {errors.ore_stimate && <p className="mt-1 text-sm text-red-600">{errors.ore_stimate}</p>}
+          </div>
+
+          {/* Scadenza */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Scadenza *
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.scadenza}
+              onChange={(e) => setFormData(prev => ({ ...prev, scadenza: e.target.value }))}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.scadenza ? 'border-red-300' : 'border-gray-300'
+              }`}
+              min={new Date().toISOString().slice(0, 16)}
+            />
+            {errors.scadenza && <p className="mt-1 text-sm text-red-600">{errors.scadenza}</p>}
+          </div>
+
+          {/* Descrizione */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descrizione
+            </label>
+            <textarea
+              value={formData.descrizione}
+              onChange={(e) => setFormData(prev => ({ ...prev, descrizione: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Descrizione opzionale della task..."
+            />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isCreating}
+              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              Annulla
+            </button>
+            <button
+              type="submit"
+              disabled={isCreating}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+            >
+              {isCreating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Creazione...
+                </>
+              ) : (
+                'Crea Task'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 // TaskCard con indicatori aggiornati
@@ -144,7 +372,7 @@ const TaskCard = ({ task, onStatusChange }) => {
   );
 };
 
-const TasksList = ({ activityId, isExpanded }) => {
+const TasksList = ({ activityId, activityName, isExpanded, onCreateTask }) => {
   const { tasks, isLoading } = useTasks({ attivita_id: activityId });
 
   if (!isExpanded) return null;
@@ -173,7 +401,10 @@ const TasksList = ({ activityId, isExpanded }) => {
             {tasks.length} task
           </span>
         </div>
-        <button className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors">
+        <button 
+          onClick={() => onCreateTask(activityId, activityName)}
+          className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+        >
           + Aggiungi Task
         </button>
       </div>
@@ -211,7 +442,10 @@ const TasksList = ({ activityId, isExpanded }) => {
             <p className="text-sm text-gray-600 mb-4">
               Le ore preventivate dell'attività saranno calcolate automaticamente dalle task che aggiungerai
             </p>
-            <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+            <button 
+              onClick={() => onCreateTask(activityId, activityName)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Crea Prima Task
             </button>
@@ -223,7 +457,7 @@ const TasksList = ({ activityId, isExpanded }) => {
 };
 
 // 🆕 ActivityCard AGGIORNATA con tempi automatici
-const ActivityCard = ({ activity }) => {
+const ActivityCard = ({ activity, onCreateTask }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const progress = calculateProgress(activity);
   const isOverdue = new Date(activity.scadenza) < new Date() && activity.stato !== 'completata';
@@ -372,7 +606,9 @@ const ActivityCard = ({ activity }) => {
         <div className="border-t border-gray-100">
           <TasksList 
             activityId={activity.id}
+            activityName={activity.nome}
             isExpanded={isExpanded}
+            onCreateTask={onCreateTask}
           />
         </div>
       )}
@@ -655,11 +891,24 @@ const ActivitiesPage = () => {
   const { user } = useAuth();
   const [filters, setFilters] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   const { activities, isLoading: activitiesLoading } = useActivities(filters);
   const { projects, isLoading: projectsLoading } = useProjects();
 
   const isManager = user?.ruolo === 'manager';
+
+  const handleCreateTask = (activityId, activityName) => {
+    setSelectedActivity({ id: activityId, nome: activityName });
+    setShowCreateTaskModal(true);
+  };
+
+  const handleTaskCreated = () => {
+    setShowCreateTaskModal(false);
+    setSelectedActivity(null);
+    // Le task si aggiorneranno automaticamente grazie a React Query
+  };
 
   if (activitiesLoading || projectsLoading) {
     return (
@@ -745,7 +994,11 @@ const ActivitiesPage = () => {
       {activities.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {activities.map((activity) => (
-            <ActivityCard key={activity.id} activity={activity} />
+            <ActivityCard 
+              key={activity.id} 
+              activity={activity} 
+              onCreateTask={handleCreateTask}
+            />
           ))}
         </div>
       ) : (
@@ -774,36 +1027,45 @@ const ActivitiesPage = () => {
         </div>
       )}
 
+      {/* Modal Creazione Attività */}
       {showCreateModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-      {/* Header Modal */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Attività</h3>
-          <button
-            onClick={() => setShowCreateModal(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Attività</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
 
-      {/* Form Content */}
-      <CreateActivityForm 
-        projects={projects} 
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => {
-          setShowCreateModal(false);
-          // Qui la lista si ricarica automaticamente grazie a React Query
-        }}
-      />
-    </div>
-  </div>
-)}
+            <CreateActivityForm 
+              projects={projects} 
+              onClose={() => setShowCreateModal(false)}
+              onSuccess={() => {
+                setShowCreateModal(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Creazione Task */}
+      {showCreateTaskModal && selectedActivity && (
+        <CreateTaskForm
+          activityId={selectedActivity.id}
+          activityName={selectedActivity.nome}
+          onClose={() => {
+            setShowCreateTaskModal(false);
+            setSelectedActivity(null);
+          }}
+          onSuccess={handleTaskCreated}
+        />
+      )}
     </div>
   );
 };
