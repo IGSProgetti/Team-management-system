@@ -16,9 +16,9 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
 
     // Manager vede tutti, risorsa solo quelli assegnati e approvati
     if (req.user.ruolo === 'risorsa') {
-      whereClause += ` AND (p.stato_approvazione = 'approvata' OR p.creato_da_risorsa = $1)
-                      AND (EXISTS (SELECT 1 FROM assegnazioni_progetto ap WHERE ap.progetto_id = p.id AND ap.utente_id = $1) 
-                           OR p.creato_da_risorsa = $1)`;
+      whereClause += ` AND (p.stato_approvazione = 'approvata' OR p.creato_da = $1)
+                 AND (EXISTS (SELECT 1 FROM assegnazioni_progetto ap WHERE ap.progetto_id = p.id AND ap.utente_id = $1) 
+                      OR p.creato_da = $1)`;
       params.push(req.user.id);
     } else if (stato_approvazione) {
       whereClause += ' AND p.stato_approvazione = $' + (params.length + 1);
@@ -38,10 +38,10 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
         u.nome as creato_da_nome,
         COUNT(DISTINCT ap.utente_id) as numero_risorse,
         COALESCE(SUM(ap.ore_assegnate), 0) as ore_totali_assegnate,
-        COALESCE(SUM(ap.ore_utilizzate), 0) as ore_totali_utilizzate
+        COALESCE(0, 0) as ore_totali_utilizzate
       FROM progetti p
       JOIN clienti c ON p.cliente_id = c.id
-      LEFT JOIN utenti u ON p.creato_da_risorsa = u.id
+      LEFT JOIN utenti u ON p.creato_da = u.id
       LEFT JOIN assegnazioni_progetto ap ON p.id = ap.progetto_id
       ${whereClause}
       GROUP BY p.id, p.nome, p.descrizione, p.budget_assegnato, p.budget_utilizzato,
@@ -65,10 +65,10 @@ router.post('/', authenticateToken, requireResource, validateProject, async (req
     const { nome, descrizione, cliente_id, budget_assegnato, data_inizio, data_fine } = req.body;
 
     const statoApprovazione = req.user.ruolo === 'manager' ? 'approvata' : 'pending_approval';
-    const creatoDataRisorsa = req.user.ruolo === 'risorsa' ? req.user.id : null;
+    const creatoDataRisorsa = req.user.ruolo === 'risorsa' ? req.user.id : req.user.id;
 
     const result = await query(`
-      INSERT INTO progetti (nome, descrizione, cliente_id, budget_assegnato, stato_approvazione, creato_da_risorsa, data_inizio, data_fine)
+      INSERT INTO progetti (nome, descrizione, cliente_id, budget_assegnato, stato_approvazione, creato_da, data_inizio, data_fine)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [nome, descrizione, cliente_id, budget_assegnato, statoApprovazione, creatoDataRisorsa, data_inizio, data_fine]);

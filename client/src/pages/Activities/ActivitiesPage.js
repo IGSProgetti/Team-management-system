@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
 import { useActivities, useProjects, useTasks } from '../../hooks';
+import { useUsers } from '../../hooks';
 
 // Helper functions
 const formatMinutesToHours = (minutes) => {
@@ -423,6 +424,233 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
   );
 };
 
+// 📋 CreateActivityForm Component
+const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    nome: '',
+    descrizione: '',
+    progetto_id: '',
+    scadenza: '',
+    risorse_assegnate: []
+  });
+  const [errors, setErrors] = useState({});
+  
+  const { users, isLoading: usersLoading } = useUsers();
+  const { createActivity, isCreating } = useActivities();
+  
+  // Filtra utenti in base al progetto selezionato (per ora mostra tutti)
+  const availableUsers = users.filter(user => user.ruolo === 'risorsa');
+  
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.nome.trim()) {
+      newErrors.nome = 'Nome attività obbligatorio';
+    } else if (formData.nome.trim().length < 2) {
+      newErrors.nome = 'Nome deve essere almeno 2 caratteri';
+    }
+    
+    if (!formData.progetto_id) {
+      newErrors.progetto_id = 'Progetto obbligatorio';
+    }
+    
+    if (!formData.scadenza) {
+      newErrors.scadenza = 'Scadenza obbligatoria';
+    } else if (new Date(formData.scadenza) <= new Date()) {
+      newErrors.scadenza = 'Scadenza deve essere futura';
+    }
+    
+    if (formData.risorse_assegnate.length === 0) {
+      newErrors.risorse_assegnate = 'Almeno una risorsa deve essere assegnata';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    createActivity(formData, {
+      onSuccess: () => {
+        onSuccess();
+      },
+      onError: (error) => {
+        console.error('Errore creazione attività:', error);
+      }
+    });
+  };
+  
+  const handleUserToggle = (userId) => {
+    setFormData(prev => ({
+      ...prev,
+      risorse_assegnate: prev.risorse_assegnate.includes(userId)
+        ? prev.risorse_assegnate.filter(id => id !== userId)
+        : [...prev.risorse_assegnate, userId]
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      {/* Info Box Tempi Automatici */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Calculator className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            <div className="font-medium text-blue-900 mb-1">✨ Tempi Automatici</div>
+            <div className="text-blue-700">
+              Le ore preventivate saranno calcolate automaticamente dalla somma delle task che creerai. 
+              Non serve inserire ore stimate per l'attività.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Nome Attività */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Nome Attività *
+        </label>
+        <input
+          type="text"
+          value={formData.nome}
+          onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            errors.nome ? 'border-red-300' : 'border-gray-300'
+          }`}
+          placeholder="Es: Sviluppo Login Component"
+        />
+        {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
+      </div>
+
+      {/* Progetto */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Progetto *
+        </label>
+        <select
+          value={formData.progetto_id}
+          onChange={(e) => setFormData(prev => ({ ...prev, progetto_id: e.target.value }))}
+          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            errors.progetto_id ? 'border-red-300' : 'border-gray-300'
+          }`}
+        >
+          <option value="">Seleziona progetto...</option>
+          {projects.map(project => (
+            <option key={project.id} value={project.id}>
+              {project.nome} ({project.cliente_nome})
+            </option>
+          ))}
+        </select>
+        {errors.progetto_id && <p className="mt-1 text-sm text-red-600">{errors.progetto_id}</p>}
+      </div>
+
+      {/* Scadenza */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Scadenza *
+        </label>
+        <input
+          type="datetime-local"
+          value={formData.scadenza}
+          onChange={(e) => setFormData(prev => ({ ...prev, scadenza: e.target.value }))}
+          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            errors.scadenza ? 'border-red-300' : 'border-gray-300'
+          }`}
+          min={new Date().toISOString().slice(0, 16)}
+        />
+        {errors.scadenza && <p className="mt-1 text-sm text-red-600">{errors.scadenza}</p>}
+      </div>
+
+      {/* Risorse Assegnate */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Risorse Assegnate * ({formData.risorse_assegnate.length} selezionate)
+        </label>
+        
+        {usersLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="ml-2 text-sm text-gray-600">Caricamento utenti...</span>
+          </div>
+        ) : (
+          <div className={`border rounded-lg p-3 max-h-48 overflow-y-auto ${
+            errors.risorse_assegnate ? 'border-red-300' : 'border-gray-300'
+          }`}>
+            {availableUsers.length > 0 ? (
+              <div className="space-y-2">
+                {availableUsers.map(user => (
+                  <label key={user.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.risorse_assegnate.includes(user.id)}
+                      onChange={() => handleUserToggle(user.id)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-900">{user.nome}</div>
+                      <div className="text-xs text-gray-500">{user.email}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">
+                Nessuna risorsa disponibile
+              </p>
+            )}
+          </div>
+        )}
+        {errors.risorse_assegnate && <p className="mt-1 text-sm text-red-600">{errors.risorse_assegnate}</p>}
+      </div>
+
+      {/* Descrizione */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Descrizione
+        </label>
+        <textarea
+          value={formData.descrizione}
+          onChange={(e) => setFormData(prev => ({ ...prev, descrizione: e.target.value }))}
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Descrizione opzionale dell'attività..."
+        />
+      </div>
+
+      {/* Buttons */}
+      <div className="flex gap-3 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isCreating}
+          className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+        >
+          Annulla
+        </button>
+        <button
+          type="submit"
+          disabled={isCreating}
+          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+        >
+          {isCreating ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              Creazione...
+            </>
+          ) : (
+            'Crea Attività'
+          )}
+        </button>
+      </div>
+    </form>
+  );
+};
+
 const ActivitiesPage = () => {
   const { user } = useAuth();
   const [filters, setFilters] = useState({});
@@ -547,29 +775,35 @@ const ActivitiesPage = () => {
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Crea Nuova Attività</h3>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Calculator className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div className="text-sm">
-                  <div className="font-medium text-blue-900 mb-1">Tempi Automatici</div>
-                  <div className="text-blue-700">
-                    Le ore preventivate saranno calcolate automaticamente dalla somma delle task che creerai.
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-            >
-              Chiudi
-            </button>
-          </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      {/* Header Modal */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Attività</h3>
+          <button
+            onClick={() => setShowCreateModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      )}
+      </div>
+
+      {/* Form Content */}
+      <CreateActivityForm 
+        projects={projects} 
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          // Qui la lista si ricarica automaticamente grazie a React Query
+        }}
+      />
+    </div>
+  </div>
+)}
     </div>
   );
 };

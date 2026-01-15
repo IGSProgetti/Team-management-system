@@ -272,6 +272,53 @@ export const useClients = (filters = {}) => {
   };
 };
 
+// Users Hook
+export const useUsers = (filters = {}) => {
+  const {
+    data: usersData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(
+    ['users', filters],
+    () => api.usersAPI.getUsers(filters),
+    {
+      select: (response) => response.data,
+      staleTime: 60000, // 1 minute
+    }
+  );
+
+  return {
+    users: usersData?.users || [],
+    isLoading,
+    error,
+    refetch,
+  };
+};
+
+// Project Users Hook (utenti assegnati a un progetto)
+export const useProjectUsers = (projectId) => {
+  const {
+    data: projectUsersData,
+    isLoading,
+    error,
+  } = useQuery(
+    ['project-users', projectId],
+    () => api.projectsAPI.getProjectUsers(projectId),
+    {
+      enabled: !!projectId,
+      select: (response) => response.data,
+      staleTime: 30000,
+    }
+  );
+
+  return {
+    projectUsers: projectUsersData?.users || [],
+    isLoading,
+    error,
+  };
+};
+
 // Dashboard Hook
 export const useDashboard = () => {
   const { user } = useAuthStore();
