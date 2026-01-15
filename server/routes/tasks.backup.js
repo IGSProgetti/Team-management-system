@@ -107,7 +107,7 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
   }
 });
 
-// POST /api/tasks - Crea nuova task ✨ CON AUTO-ASSEGNAZIONE PROGETTO
+// POST /api/tasks - Crea nuova task
 router.post('/', authenticateToken, requireResource, validateTask, async (req, res) => {
   try {
     const { nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id } = req.body;
@@ -136,62 +136,21 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
         throw new Error('Activity not found or access denied');
       }
 
-      // ✨ NUOVO SISTEMA AUTO-ASSEGNAZIONE PROGETTO
-      console.log('🔄 Controllo assegnazione progetto per utente:', utente_assegnato);
-      
-      // 1. Verifica che l'utente esista ed sia attivo
-      const userExistsResult = await client.query(`
+      // Verifica che l'utente assegnato esista e abbia accesso al progetto
+      const userCheck = await client.query(`
         SELECT u.id, u.nome 
         FROM utenti u
-        WHERE u.id = $1 AND u.attivo = true
-      `, [utente_assegnato]);
-
-      if (userExistsResult.rows.length === 0) {
-        throw new Error('User not found or inactive');
-      }
-
-      const userData = userExistsResult.rows[0];
-      console.log('✅ Utente trovato:', userData.nome);
-
-      // 2. Controlla se l'utente è già assegnato al progetto
-      const projectAssignmentCheck = await client.query(`
-        SELECT ap.id, p.id as progetto_id, p.nome as progetto_nome
-        FROM assegnazioni_progetto ap
+        JOIN assegnazioni_progetto ap ON u.id = ap.utente_id
         JOIN progetti p ON ap.progetto_id = p.id
         JOIN attivita a ON p.id = a.progetto_id
-        WHERE ap.utente_id = $1 AND a.id = $2
+        WHERE u.id = $1 AND a.id = $2 AND u.attivo = true
       `, [utente_assegnato, attivita_id]);
 
-      // 3. Se NON è assegnato, assegna automaticamente
-      if (projectAssignmentCheck.rows.length === 0) {
-        console.log('⚠️  Utente non assegnato al progetto - Avvio auto-assegnazione...');
-        
-        // Ottieni il progetto_id dall'attività
-        const projectResult = await client.query(`
-          SELECT a.progetto_id, p.nome as progetto_nome
-          FROM attivita a 
-          JOIN progetti p ON a.progetto_id = p.id
-          WHERE a.id = $1
-        `, [attivita_id]);
-        
-        if (projectResult.rows.length === 0) {
-          throw new Error('Activity project not found');
-        }
-        
-        const { progetto_id, progetto_nome } = projectResult.rows[0];
-        
-        // Auto-assegnazione con ore di default (40 ore = 2400 minuti)
-        await client.query(`
-          INSERT INTO assegnazioni_progetto (progetto_id, utente_id, ore_assegnate)
-          VALUES ($1, $2, $3)
-        `, [progetto_id, utente_assegnato, 2400]);
-        
-        console.log(`🎯 AUTO-ASSEGNATO: ${userData.nome} → Progetto: ${progetto_nome} (40 ore)`);
-      } else {
-        console.log('✅ Utente già assegnato al progetto:', projectAssignmentCheck.rows[0].progetto_nome);
+      if (userCheck.rows.length === 0) {
+        throw new Error('User not assigned to this project or activity');
       }
 
-      // 4. Crea la task (ora l'utente è sicuramente assegnato al progetto)
+      // ✅ CREA TASK CON IL CAMPO creata_da AGGIUNTO
       const taskResult = await client.query(`
         INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, creata_da)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -207,13 +166,11 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
         `, [task.id, task_collegata_id]);
       }
 
-      console.log('🚀 Task creata con successo:', task.nome);
-
       res.status(201).json({
         message: 'Task created successfully',
         task: {
           ...task,
-          utente_nome: userData.nome
+          utente_nome: userCheck.rows[0].nome
         }
       });
     });
@@ -288,7 +245,7 @@ router.get('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
 
     // Ottieni cronologia task (se esistono timesheet entries)
     const timesheetResult = await query(`
-      SELECT data, ore_lavorate, descrizione, data_registrazione
+      SELECT data, minuti_lavorati, data_registrazione
       FROM timesheet
       WHERE task_id = $1
       ORDER BY data DESC
@@ -395,7 +352,7 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
       // Completa task con ore effettive
       const result = await client.query(`
         UPDATE task 
-        SET stato = 'completata', ore_effettive = $2, data_completamento = CURRENT_TIMESTAMP, data_aggiornamento = CURRENT_TIMESTAMP
+        SET stato = 'completata', ore_effettive = $2, data_aggiornamento = CURRENT_TIMESTAMP
         WHERE id = $1 AND stato != 'completata' ${permissionCheck}
         RETURNING *, 
         (SELECT nome FROM utenti WHERE id = task.utente_assegnato) as utente_nome
@@ -407,15 +364,95 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
 
       const task = result.rows[0];
 
+      // Se c'è una task collegata da creare, creala automaticamente
+      if (task.task_collegata_id) {
+        // La logica per creare task collegata è gestita dal trigger del database
+        // ma possiamo anche farlo qui per maggiore controllo
+        
+        const collegataResult = await client.query(`
+          SELECT nome, descrizione, ore_stimate, scadenza 
+          FROM task 
+          WHERE id = $1
+        `, [task.task_collegata_id]);
+
+        if (collegataResult.rows.length > 0) {
+          const collegata = collegataResult.rows[0];
+          
+          await client.query(`
+            INSERT INTO task (
+              nome, descrizione, attivita_id, utente_assegnato, 
+              ore_stimate, scadenza, task_madre_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [
+            `${collegata.nome} (Auto-generata)`,
+            collegata.descrizione,
+            task.attivita_id,
+            task.utente_assegnato,
+            collegata.ore_stimate,
+            collegata.scadenza,
+            task.id
+          ]);
+        }
+      }
+
+      // Il trigger del database aggiorna automaticamente:
+      // - ore_effettive dell'attività
+      // - ore_giornaliere dell'utente  
+      // - timesheet entry
+
       res.json({
         message: 'Task completed successfully',
-        task: task
+        task: {
+          ...task,
+          ore_completate_oggi: ore_effettive
+        }
       });
     });
 
   } catch (error) {
     console.error('Complete task error:', error);
     res.status(500).json({ error: 'Server Error', details: error.message || 'Failed to complete task' });
+  }
+});
+
+// DELETE /api/tasks/:id - Elimina task (solo se non completata)
+router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verifica permessi
+    let permissionCheck = '';
+    let params = [id];
+
+    if (req.user.ruolo === 'risorsa') {
+      permissionCheck = ' AND utente_assegnato = $2';
+      params.push(req.user.id);
+    } else {
+      // Manager può eliminare task non completate
+      permissionCheck = ' AND stato != \'completata\'';
+    }
+
+    const result = await query(`
+      DELETE FROM task 
+      WHERE id = $1 ${permissionCheck}
+      RETURNING nome, stato
+    `, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Not Found', 
+        details: 'Task not found, already completed, or access denied' 
+      });
+    }
+
+    res.json({
+      message: 'Task deleted successfully',
+      task_name: result.rows[0].nome
+    });
+
+  } catch (error) {
+    console.error('Delete task error:', error);
+    res.status(500).json({ error: 'Server Error', details: 'Failed to delete task' });
   }
 });
 
