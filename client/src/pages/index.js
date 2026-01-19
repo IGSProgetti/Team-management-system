@@ -12,14 +12,7 @@ export const RegisterPage = () => (
 // NUOVO import del file completo che hai creato
 export { default as ProjectsPage } from './Projects/ProjectsPage';
 
-export const ClientsPage = () => (
-  <div>
-    <h1 className="text-2xl font-bold mb-6">Clienti</h1>
-    <div className="bg-white rounded-lg shadow p-6">
-      <p>Gestione clienti - In sviluppo</p>
-    </div>
-  </div>
-);
+export { default as ClientsPage } from './Clients/ClientsPage';
 
 export const CalendarPage = () => (
   <div>

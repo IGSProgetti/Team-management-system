@@ -41,7 +41,7 @@ const getStatusIcon = (stato) => {
   }
 };
 
-// CreateTaskForm Component
+// ✨ CreateTaskForm Component CON SELETTORE ORE/MINUTI
 const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     nome: '',
@@ -49,6 +49,7 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
     attivita_id: activityId,
     utente_assegnato: '',
     ore_stimate: '',
+    stimate_mode: 'hours', // ✨ Modalità ore/minuti aggiunta
     scadenza: ''
   });
   const [errors, setErrors] = useState({});
@@ -76,9 +77,28 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
       newErrors.scadenza = 'Scadenza deve essere futura';
     }
     
-    // ✅ RENDI OBBLIGATORIE LE ORE STIMATE (come nel TasksPage esistente)
-    if (!formData.ore_stimate || formData.ore_stimate <= 0) {
-      newErrors.ore_stimate = 'Ore stimate obbligatorie (minimo 0.5 ore)';
+    // ✅ Validazione ore stimate con modalità
+    if (!formData.ore_stimate || parseFloat(formData.ore_stimate) <= 0) {
+      if (formData.stimate_mode === 'hours') {
+        newErrors.ore_stimate = 'Ore stimate obbligatorie (minimo 0.1 ore)';
+      } else {
+        newErrors.ore_stimate = 'Minuti stimati obbligatori (minimo 1 minuto)';
+      }
+    } else {
+      // Validazione range per modalità
+      if (formData.stimate_mode === 'hours') {
+        if (parseFloat(formData.ore_stimate) < 0.1) {
+          newErrors.ore_stimate = 'Minimo 0.1 ore (6 minuti)';
+        } else if (parseFloat(formData.ore_stimate) > 24) {
+          newErrors.ore_stimate = 'Massimo 24 ore per task';
+        }
+      } else {
+        if (parseInt(formData.ore_stimate) < 1) {
+          newErrors.ore_stimate = 'Minimo 1 minuto';
+        } else if (parseInt(formData.ore_stimate) > 1440) {
+          newErrors.ore_stimate = 'Massimo 1440 minuti (24 ore)';
+        }
+      }
     }
     
     setErrors(newErrors);
@@ -92,13 +112,21 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
       return;
     }
     
-    // Costruisci i dati esattamente come nel TasksPage esistente
+    // ✨ Conversione ore/minuti in minuti per il backend
+    let oreStimateInMinuti;
+    if (formData.stimate_mode === 'hours') {
+      oreStimateInMinuti = Math.round(parseFloat(formData.ore_stimate) * 60);
+    } else {
+      oreStimateInMinuti = parseInt(formData.ore_stimate);
+    }
+    
+    // Costruisci i dati esattamente come prima
     const submitData = {
       nome: formData.nome,
       descrizione: formData.descrizione,
       attivita_id: formData.attivita_id,
       utente_assegnato: formData.utente_assegnato,
-      ore_stimate: parseInt(formData.ore_stimate) * 60, // Converti ore in minuti
+      ore_stimate: oreStimateInMinuti, // Sempre in minuti al backend
       scadenza: formData.scadenza
     };
     
@@ -114,6 +142,19 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
         console.error('🔧 DEBUG - Response data:', error.response?.data);
       }
     });
+  };
+
+  // ✨ Funzione per mostrare conversione
+  const getTimeConversion = () => {
+    if (!formData.ore_stimate) return '';
+    
+    if (formData.stimate_mode === 'hours') {
+      const minutes = Math.round(parseFloat(formData.ore_stimate || 0) * 60);
+      return `≈ ${minutes} minuti`;
+    } else {
+      const hours = (parseInt(formData.ore_stimate || 0) / 60).toFixed(1);
+      return `≈ ${hours} ore`;
+    }
   };
 
   return (
@@ -185,25 +226,87 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
             {errors.utente_assegnato && <p className="mt-1 text-sm text-red-600">{errors.utente_assegnato}</p>}
           </div>
 
-          {/* Ore Stimate - OBBLIGATORIE */}
+          {/* ✨ ORE STIMATE CON SELETTORE ORE/MINUTI - SOSTITUISCE IL CAMPO PRECEDENTE */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ore Stimate *
+              Tempo Preventivato *
             </label>
-            <input
-              type="number"
-              min="0.5"
-              step="0.5"
-              value={formData.ore_stimate}
-              onChange={(e) => setFormData(prev => ({ ...prev, ore_stimate: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.ore_stimate ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="Es: 2.5"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Le ore effettive saranno inserite al completamento della task
-            </p>
+            
+            {/* Selettore modalità */}
+            <div className="flex items-center gap-4 mb-3">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="stimate_mode"
+                  value="hours"
+                  checked={formData.stimate_mode === 'hours'}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    stimate_mode: e.target.value,
+                    ore_stimate: '' // Reset valore
+                  }))}
+                  className="mr-2"
+                />
+                <span className="text-sm">Ore</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="stimate_mode"
+                  value="minutes"
+                  checked={formData.stimate_mode === 'minutes'}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    stimate_mode: e.target.value,
+                    ore_stimate: '' // Reset valore
+                  }))}
+                  className="mr-2"
+                />
+                <span className="text-sm">Minuti</span>
+              </label>
+            </div>
+
+            {/* Input basato sulla modalità */}
+            <div className="space-y-2">
+              {formData.stimate_mode === 'hours' ? (
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="24"
+                  value={formData.ore_stimate}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ore_stimate: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.ore_stimate ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="es: 2.5"
+                />
+              ) : (
+                <input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value={formData.ore_stimate}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ore_stimate: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.ore_stimate ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="es: 150"
+                />
+              )}
+              
+              {/* Conversione automatica */}
+              {formData.ore_stimate && (
+                <p className="text-xs text-gray-500 italic">
+                  {getTimeConversion()}
+                </p>
+              )}
+              
+              <p className="mt-1 text-xs text-gray-500">
+                Le ore effettive saranno inserite al completamento della task
+              </p>
+            </div>
+            
             {errors.ore_stimate && <p className="mt-1 text-sm text-red-600">{errors.ore_stimate}</p>}
           </div>
 
@@ -269,7 +372,7 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
   );
 };
 
-// TaskCard con indicatori aggiornati
+// TaskCard con indicatori aggiornati - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
 const TaskCard = ({ task, onStatusChange }) => {
   const isOverdue = new Date(task.scadenza) < new Date() && task.stato !== 'completata';
   const performance = task.ore_effettive && task.ore_stimate ? 
@@ -372,6 +475,7 @@ const TaskCard = ({ task, onStatusChange }) => {
   );
 };
 
+// MANTIENE TUTTE LE ALTRE FUNZIONI ESISTENTI INVARIATE
 const TasksList = ({ activityId, activityName, isExpanded, onCreateTask }) => {
   const { tasks, isLoading } = useTasks({ attivita_id: activityId });
 
@@ -456,7 +560,7 @@ const TasksList = ({ activityId, activityName, isExpanded, onCreateTask }) => {
   );
 };
 
-// 🆕 ActivityCard AGGIORNATA con tempi automatici
+// ActivityCard AGGIORNATA con tempi automatici - MANTIENE TUTTE LE FUNZIONALITÀ
 const ActivityCard = ({ activity, onCreateTask }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const progress = calculateProgress(activity);
@@ -528,7 +632,7 @@ const ActivityCard = ({ activity, onCreateTask }) => {
           </p>
         )}
 
-        {/* 🆕 Ore AUTOMATICHE con indicatori speciali */}
+        {/* Ore AUTOMATICHE con indicatori speciali */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-center mb-2">
@@ -616,6 +720,7 @@ const ActivityCard = ({ activity, onCreateTask }) => {
   );
 };
 
+// MANTIENE TUTTI GLI ALTRI COMPONENTI ESISTENTI INVARIATI
 const ActivityFilters = ({ filters, setFilters, projects }) => {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -660,7 +765,7 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
   );
 };
 
-// 📋 CreateActivityForm Component
+// CreateActivityForm Component - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
 const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     nome: '',
@@ -887,6 +992,7 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
   );
 };
 
+// COMPONENTE PRINCIPALE MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
 const ActivitiesPage = () => {
   const { user } = useAuth();
   const [filters, setFilters] = useState({});

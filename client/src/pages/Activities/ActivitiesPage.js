@@ -765,12 +765,12 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
   );
 };
 
-// CreateActivityForm Component - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
-const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
+// CreateActivityForm Component - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI + PROGETTO PRE-SELEZIONATO
+const CreateActivityForm = ({ projects, preselectedProject, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     nome: '',
     descrizione: '',
-    progetto_id: '',
+    progetto_id: preselectedProject?.id || '', // ✨ Pre-compila se disponibile
     scadenza: '',
     risorse_assegnate: []
   });
@@ -837,6 +837,23 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      {/* ✨ Messaggio se progetto pre-selezionato */}
+      {preselectedProject && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
+            <div>
+              <div className="font-medium text-green-900">
+                Creazione attività per progetto: {preselectedProject.nome}
+              </div>
+              <div className="text-sm text-green-700">
+                Il progetto è già selezionato. Compila gli altri campi per creare l'attività.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Info Box Tempi Automatici */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -864,6 +881,7 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
             errors.nome ? 'border-red-300' : 'border-gray-300'
           }`}
           placeholder="Es: Sviluppo Login Component"
+          autoFocus // ✨ Focus automatico sul primo campo
         />
         {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
       </div>
@@ -879,6 +897,7 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
             errors.progetto_id ? 'border-red-300' : 'border-gray-300'
           }`}
+          disabled={!!preselectedProject} // ✨ Disabilita se pre-selezionato
         >
           <option value="">Seleziona progetto...</option>
           {projects.map(project => (
@@ -992,18 +1011,36 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
   );
 };
 
-// COMPONENTE PRINCIPALE MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
+// ✨ COMPONENTE PRINCIPALE CON SUPPORTO PROGETTO PRE-SELEZIONATO
 const ActivitiesPage = () => {
   const { user } = useAuth();
   const [filters, setFilters] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [preselectedProject, setPreselectedProject] = useState(null); // ✨ Nuovo stato
 
   const { activities, isLoading: activitiesLoading } = useActivities(filters);
   const { projects, isLoading: projectsLoading } = useProjects();
 
   const isManager = user?.ruolo === 'manager';
+
+  // ✨ Controlla se c'è un progetto pre-selezionato dalla dashboard progetti
+  React.useEffect(() => {
+    const selectedProject = localStorage.getItem('selected_project');
+    if (selectedProject) {
+      try {
+        const projectData = JSON.parse(selectedProject);
+        setPreselectedProject(projectData);
+        setShowCreateModal(true); // Apri automaticamente il modal
+        // Rimuovi dal localStorage dopo aver utilizzato
+        localStorage.removeItem('selected_project');
+      } catch (error) {
+        console.error('Errore parsing selected_project:', error);
+        localStorage.removeItem('selected_project');
+      }
+    }
+  }, []);
 
   const handleCreateTask = (activityId, activityName) => {
     setSelectedActivity({ id: activityId, nome: activityName });
@@ -1014,6 +1051,12 @@ const ActivitiesPage = () => {
     setShowCreateTaskModal(false);
     setSelectedActivity(null);
     // Le task si aggiorneranno automaticamente grazie a React Query
+  };
+
+  // ✨ Handler aggiornato per gestire il reset del progetto pre-selezionato
+  const handleActivityCreated = () => {
+    setShowCreateModal(false);
+    setPreselectedProject(null); // Reset del progetto pre-selezionato
   };
 
   if (activitiesLoading || projectsLoading) {
@@ -1133,7 +1176,7 @@ const ActivitiesPage = () => {
         </div>
       )}
 
-      {/* Modal Creazione Attività */}
+      {/* ✨ Modal Creazione Attività con supporto progetto pre-selezionato */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -1141,7 +1184,10 @@ const ActivitiesPage = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Attività</h3>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setPreselectedProject(null); // ✨ Reset anche qui
+                  }}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="w-6 h-6" />
@@ -1150,11 +1196,13 @@ const ActivitiesPage = () => {
             </div>
 
             <CreateActivityForm 
-              projects={projects} 
-              onClose={() => setShowCreateModal(false)}
-              onSuccess={() => {
+              projects={projects}
+              preselectedProject={preselectedProject} // ✨ Passa il progetto pre-selezionato
+              onClose={() => {
                 setShowCreateModal(false);
+                setPreselectedProject(null); // ✨ Reset progetto
               }}
+              onSuccess={handleActivityCreated} // ✨ Handler aggiornato
             />
           </div>
         </div>
