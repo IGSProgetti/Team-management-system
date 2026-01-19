@@ -11,6 +11,7 @@ import LoginPage from './pages/Auth/LoginPage';
 import { RegisterPage, ActivitiesPage, ProjectsPage, ClientsPage, CalendarPage, ProfilePage, UsersPage } from './pages';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import TasksPage from './pages/Tasks/TasksPage';
+import BudgetControlPage from './pages/Manager/BudgetControlPage';
 
 // Components
 import Layout from './components/Layout';
@@ -219,6 +220,15 @@ function App() {
                     element={
                       <ManagerRoute>
                         <UsersPage />
+                      </ManagerRoute>
+                    }
+                  />
+                  
+                  <Route
+                    path="budget-control"
+                    element={
+                      <ManagerRoute>
+                        <BudgetControlPage />
                       </ManagerRoute>
                     }
                   />

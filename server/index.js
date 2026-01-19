@@ -47,6 +47,9 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/calendar', calendarRoutes);
 
+const budgetControlRoutes = require('./routes/budget-control');
+   app.use('/api/budget-control', budgetControlRoutes);
+
 // Health check
 app.get('/api/health', async (req, res) => {
   try {

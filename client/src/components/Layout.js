@@ -9,7 +9,8 @@ import {
   Calendar,
   User,
   LogOut,
-  Menu
+  Menu,
+  DollarSign  // <-- Aggiungi questa riga
 } from 'lucide-react';
 import { useAuthStore } from '../store';
 
@@ -20,19 +21,23 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navigationItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Task', href: '/tasks', icon: CheckSquare },
-    { name: 'Attività', href: '/activities', icon: Layers },
-    { name: 'Progetti', href: '/projects', icon: FolderOpen },
-    { name: 'Clienti', href: '/clients', icon: Users },
-    { name: 'Calendario', href: '/calendar', icon: Calendar },
-  ];
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
+  { name: 'Task', href: '/tasks', icon: CheckSquare },
+  { name: 'Attività', href: '/activities', icon: Layers },
+  { name: 'Progetti', href: '/projects', icon: FolderOpen },
+  { name: 'Clienti', href: '/clients', icon: Users },
+  { name: 'Calendario', href: '/calendar', icon: Calendar },
+];
 
-  if (user?.ruolo === 'manager') {
-    navigationItems.splice(-1, 0, {
-      name: 'Utenti', href: '/users', icon: User
-    });
-  }
+if (user?.ruolo === 'manager') {
+  navigationItems.splice(-1, 0, {
+    name: 'Utenti', href: '/users', icon: User
+  });
+  // Aggiungi questa riga per Budget Control
+  navigationItems.splice(-1, 0, {
+    name: 'Budget Control', href: '/budget-control', icon: DollarSign
+  });
+}
 
   const currentPage = navigationItems.find(item => location.pathname.startsWith(item.href));
 
