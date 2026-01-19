@@ -11,7 +11,8 @@ import {
   Plus,
   BarChart3,
   Target,
-  Activity
+  Activity,
+  Search
 } from 'lucide-react';
 import CreateProjectModal from './CreateProjectModal';
 import ProjectDetailsModal from './ProjectDetailsModal';
@@ -37,7 +38,7 @@ const formatDate = (dateString) => {
 };
 
 // Componente Overview Statistiche Globali
-const ProjectsOverview = ({ overview, loading }) => {
+const ProjectsOverview = ({ overview, loading, onCardClick, activeFilter }) => {
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -58,8 +59,15 @@ const ProjectsOverview = ({ overview, loading }) => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      {/* Progetti Totali */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+      {/* Progetti Attivi */}
+      <div 
+        onClick={() => onCardClick('attivi')}
+        className={`rounded-xl p-6 cursor-pointer transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1 ${
+          activeFilter === 'attivi' 
+            ? 'bg-blue-100 border-2 border-blue-400 shadow-lg' 
+            : 'bg-blue-50 border border-blue-200 hover:bg-blue-100'
+        }`}
+      >
         <div className="flex items-center">
           <div className="p-2 bg-blue-100 rounded-lg">
             <Building2 className="w-6 h-6 text-blue-600" />
@@ -71,10 +79,22 @@ const ProjectsOverview = ({ overview, loading }) => {
             <div className="text-sm text-blue-600">Progetti Attivi</div>
           </div>
         </div>
+        {activeFilter === 'attivi' && (
+          <div className="mt-2 text-xs text-blue-700 font-medium">
+            ✓ Filtro attivo
+          </div>
+        )}
       </div>
 
       {/* Progetti Completati */}
-      <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+      <div 
+        onClick={() => onCardClick('completati')}
+        className={`rounded-xl p-6 cursor-pointer transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1 ${
+          activeFilter === 'completati' 
+            ? 'bg-green-100 border-2 border-green-400 shadow-lg' 
+            : 'bg-green-50 border border-green-200 hover:bg-green-100'
+        }`}
+      >
         <div className="flex items-center">
           <div className="p-2 bg-green-100 rounded-lg">
             <CheckCircle className="w-6 h-6 text-green-600" />
@@ -86,10 +106,22 @@ const ProjectsOverview = ({ overview, loading }) => {
             <div className="text-sm text-green-600">Completati</div>
           </div>
         </div>
+        {activeFilter === 'completati' && (
+          <div className="mt-2 text-xs text-green-700 font-medium">
+            ✓ Filtro attivo
+          </div>
+        )}
       </div>
 
       {/* Progetti in Ritardo */}
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
+      <div 
+        onClick={() => onCardClick('in_ritardo')}
+        className={`rounded-xl p-6 cursor-pointer transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1 ${
+          activeFilter === 'in_ritardo' 
+            ? 'bg-orange-100 border-2 border-orange-400 shadow-lg' 
+            : 'bg-orange-50 border border-orange-200 hover:bg-orange-100'
+        }`}
+      >
         <div className="flex items-center">
           <div className="p-2 bg-orange-100 rounded-lg">
             <AlertTriangle className="w-6 h-6 text-orange-600" />
@@ -101,9 +133,14 @@ const ProjectsOverview = ({ overview, loading }) => {
             <div className="text-sm text-orange-600">In Ritardo</div>
           </div>
         </div>
+        {activeFilter === 'in_ritardo' && (
+          <div className="mt-2 text-xs text-orange-700 font-medium">
+            ✓ Filtro attivo
+          </div>
+        )}
       </div>
 
-      {/* Budget Totale */}
+      {/* Budget Totale - NON cliccabile */}
       <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
         <div className="flex items-center">
           <div className="p-2 bg-purple-100 rounded-lg">
@@ -316,6 +353,12 @@ const ProjectsPage = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
 
+  // AGGIUNGI:
+  const [filters, setFilters] = useState({ 
+  status: 'all', // 'all', 'attivi', 'completati', 'in_ritardo'
+  search: '' 
+  });
+
   // Fetch dati dashboard
   const fetchDashboard = async () => {
     try {
@@ -385,6 +428,49 @@ const ProjectsPage = () => {
     setShowDetailsModal(true);
   };
 
+  // DOPO la funzione handleProjectClick esistente, AGGIUNGI:
+const handleStatsCardClick = (filterType) => {
+  setFilters(prev => ({ ...prev, status: filterType }));
+};
+
+const handleSearchChange = (searchTerm) => {
+   setFilters(prev => ({ ...prev, search: searchTerm }));
+};
+
+// AGGIUNGI questa funzione dopo handleSearchChange:
+const getFilteredProjects = () => {
+  let filtered = projects;
+
+  // Filtro per stato
+  if (filters.status !== 'all') {
+    filtered = filtered.filter(project => {
+      switch (filters.status) {
+        case 'attivi':
+          return project.status_indicators?.in_corso || 
+                 (!project.status_indicators?.completato && 
+                  !project.status_indicators?.in_ritardo);
+        case 'completati':
+          return project.status_indicators?.completato;
+        case 'in_ritardo':
+          return project.status_indicators?.in_ritardo;
+        default:
+          return true;
+      }
+    });
+  }
+
+  // Filtro per ricerca (nome progetto o cliente)
+  if (filters.search.trim()) {
+    const searchLower = filters.search.toLowerCase().trim();
+    filtered = filtered.filter(project =>
+      project.nome?.toLowerCase().includes(searchLower) ||
+      project.cliente_nome?.toLowerCase().includes(searchLower)
+    );
+  }
+
+  return filtered;
+};
+
   // Handler per chiudere modal dettagli
   const handleCloseDetails = () => {
     setShowDetailsModal(false);
@@ -439,8 +525,38 @@ const ProjectsPage = () => {
         </button>
       </div>
 
+      {/* AGGIUNGI QUESTA SEZIONE: Barra di Ricerca e Filtri */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Cerca per nome progetto o cliente..."
+            value={filters.search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        {/* Reset Filtri */}
+        {(filters.status !== 'all' || filters.search) && (
+          <button
+            onClick={() => setFilters({ status: 'all', search: '' })}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancella filtri
+          </button>
+        )}
+      </div>
+
       {/* Overview Cards */}
-      <ProjectsOverview overview={overview} loading={loading} />
+      <ProjectsOverview 
+      overview={overview} 
+      loading={loading} 
+      onCardClick={handleStatsCardClick}
+      activeFilter={filters.status}
+      />
 
       {/* Progetti Grid */}
       {loading ? (
@@ -460,16 +576,43 @@ const ProjectsPage = () => {
           ))}
         </div>
       ) : projects.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <ProjectCard 
-              key={project.id} 
-              project={project} 
-              onCreateActivity={handleCreateActivity}
-              onProjectClick={handleProjectClick}
-            />
-          ))}
-        </div>
+  (() => {
+    const filteredProjects = getFilteredProjects();
+    
+    return filteredProjects.length > 0 ? (
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {filteredProjects.map((project) => (
+          <ProjectCard 
+            key={project.id} 
+            project={project} 
+            onCreateActivity={handleCreateActivity}
+            onProjectClick={handleProjectClick}
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="text-center py-12">
+        <Building2 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          Nessun progetto trovato
+        </h3>
+        <p className="text-gray-500 mb-4">
+          {filters.search ? 
+            `Nessun progetto corrisponde a "${filters.search}"` :
+            `Nessun progetto ${filters.status === 'attivi' ? 'attivo' : 
+                              filters.status === 'completati' ? 'completato' : 
+                              'in ritardo'}`
+          }
+        </p>
+        <button
+          onClick={() => setFilters({ status: 'all', search: '' })}
+          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Cancella filtri
+        </button>
+      </div>
+    );
+  })()
       ) : (
         // Empty state
         <div className="text-center py-12">
