@@ -29,8 +29,8 @@ router.get('/', bypassAuth, validatePagination, async (req, res) => {
       whereClause += ' AND (stato_approvazione = $1 OR creato_da = $2)';
       params.push('approvata', req.user.id);
     } else if (stato_approvazione) {
-  whereClause += ' AND c.stato_approvazione = $' + (params.length + 1);
-  params.push(stato_approvazione);
+      whereClause += ' AND stato_approvazione = $' + (params.length + 1);
+      params.push(stato_approvazione);
     }
 
     const countResult = await query(`SELECT COUNT(*) FROM clienti ${whereClause}`, params);
@@ -85,8 +85,8 @@ router.post('/', bypassAuth, validateClient, async (req, res) => {
     const result = await query(`
       INSERT INTO clienti (nome, descrizione, budget, stato_approvazione, creato_da)
       VALUES ($1, $2, $3, $4, $5)
-RETURNING *
-`, [nome, descrizione, budget, statoApprovazione, req.user.id]);
+      RETURNING *
+    `, [nome, descrizione, budget, statoApprovazione, req.user.id]);
 
     const client = result.rows[0];
 

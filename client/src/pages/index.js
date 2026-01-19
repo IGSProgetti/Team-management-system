@@ -32,14 +32,8 @@ export const ProfilePage = () => (
   </div>
 );
 
-export const UsersPage = () => (
-  <div>
-    <h1 className="text-2xl font-bold mb-6">Gestione Utenti</h1>
-    <div className="bg-white rounded-lg shadow p-6">
-      <p>Gestione team - Solo Manager - In sviluppo</p>
-    </div>
-  </div>
-);
+// In client/src/pages/index.js  
+export { default as UsersPage } from './Users/UsersPage';
 
 // Import della nuova pagina Attività
 export { default as ActivitiesPage } from './Activities/ActivitiesPage';

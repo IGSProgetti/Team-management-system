@@ -10,36 +10,14 @@ const api = axios.create({
   },
 });
 
-// Request interceptor - Add auth token (VERSIONE CORRETTA)
+// Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
-    let token = null;
+    const token = localStorage.getItem('token') || 
+                 JSON.parse(localStorage.getItem('auth-storage') || '{}')?.state?.token;
     
-    try {
-      // Metodo 1: Token diretto (per compatibilità)
-      token = localStorage.getItem('token');
-      
-      // Metodo 2: Token da auth-storage (Zustand store)
-      if (!token) {
-        const authStorage = localStorage.getItem('auth-storage');
-        if (authStorage) {
-          try {
-            const authData = JSON.parse(authStorage);
-            token = authData?.state?.token;
-          } catch (parseError) {
-            console.warn('Error parsing auth-storage:', parseError);
-            // Fallback: prova a pulire e riprovare
-            localStorage.removeItem('auth-storage');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error retrieving auth token:', error);
-    }
-    
-    // Aggiungi token se presente e valido
-    if (token && typeof token === 'string' && token.trim()) {
-      config.headers.Authorization = `Bearer ${token.trim()}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
     return config;

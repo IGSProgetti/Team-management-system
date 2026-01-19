@@ -38,59 +38,53 @@ const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
   }, [isOpen]);
 
   const fetchClients = async () => {
-    try {
-      setLoadingClients(true);
-      
-      // Ottieni il token
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
+  try {
+    setLoadingClients(true);
+    
+    // Ottieni il token
+    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+    const token = authData.state?.token;
 
-      if (!token) {
-        throw new Error('Token non trovato');
-      }
-
-      const response = await fetch('/api/clients?stato_approvazione=approvata', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        // Se l'API clienti non funziona, usa dati mock temporanei
-        console.warn('API clienti non disponibile, usando dati demo');
-        setClients([
-          {
-            id: '06795d22-86d2-4e60-8e08-f9642163ae6a',
-            nome: 'Acme Corporation',
-            budget: 100000.00,
-            budget_utilizzato: 65000.00,
-            budget_residuo: 35000.00
-          }
-        ]);
-        return;
-      }
-
-      const data = await response.json();
-      setClients(data.clients || []);
-
-    } catch (error) {
-      console.error('Errore fetch clienti:', error);
-      // Fallback ai dati demo se l'API non funziona
-      setClients([
-        {
-          id: '06795d22-86d2-4e60-8e08-f9642163ae6a',
-          nome: 'Acme Corporation',
-          budget: 100000.00,
-          budget_utilizzato: 65000.00,
-          budget_residuo: 35000.00
-        }
-      ]);
-      console.log('Usando dati demo per i clienti');
-    } finally {
-      setLoadingClients(false);
+    if (!token) {
+      throw new Error('Token non trovato');
     }
-  };
+
+    // USA API SENZA FILTRO (funziona!)
+    const response = await fetch('/api/clients', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // FILTRA LATO FRONTEND (solo clienti approvati)
+    const approvedClients = (data.clients || []).filter(client => 
+      client.stato_approvazione === 'approvata'
+    );
+    
+    console.log('Clienti approvati trovati:', approvedClients);
+    setClients(approvedClients);
+
+  } catch (error) {
+    console.error('Errore fetch clienti:', error);
+    // Fallback ai dati demo come prima
+    setClients([{
+      id: '06795d22-86d2-4e60-8e08-f9642163ae6a',
+      nome: 'Acme Corporation',
+      budget: 100000.00,
+      budget_utilizzato: 65000.00,
+      budget_residuo: 35000.00
+    }]);
+  } finally {
+    setLoadingClients(false);
+  }
+};
 
   // Handle input changes
   const handleInputChange = (e) => {

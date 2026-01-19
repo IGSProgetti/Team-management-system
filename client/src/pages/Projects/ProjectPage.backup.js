@@ -13,6 +13,8 @@ import {
   Target,
   Activity
 } from 'lucide-react';
+import CreateProjectModal from './CreateProjectModal';
+import ProjectDetailsModal from './ProjectDetailsModal';
 
 // Utility functions
 const formatCurrency = (amount) => {
@@ -120,7 +122,7 @@ const ProjectsOverview = ({ overview, loading }) => {
 };
 
 // Componente Card Progetto Avanzata
-const ProjectCard = ({ project, onCreateActivity }) => {
+const ProjectCard = ({ project, onCreateActivity, onProjectClick }) => {
   const getStatusColor = (indicators) => {
     if (indicators.completato) return 'bg-green-500';
     if (indicators.in_ritardo) return 'bg-red-500';
@@ -138,12 +140,15 @@ const ProjectCard = ({ project, onCreateActivity }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow duration-200">
+    <div 
+      onClick={() => onProjectClick(project)}
+      className="bg-white rounded-xl shadow-sm border hover:shadow-lg hover:border-blue-300 transition-all duration-200 cursor-pointer group"
+    >
       {/* Header con Status */}
       <div className="p-6 pb-4">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
               {project.nome}
             </h3>
             <p className="text-sm text-gray-500">{project.cliente_nome}</p>
@@ -265,20 +270,36 @@ const ProjectCard = ({ project, onCreateActivity }) => {
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => onCreateActivity(project.id, project.nome)}
+            onClick={(e) => {
+              e.stopPropagation(); // Previene l'apertura del modal
+              onCreateActivity(project.id, project.nome);
+            }}
             className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <Plus className="w-4 h-4 mr-1" />
             Nuova Attività
           </button>
           
-          <button className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+          <button 
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
             <BarChart3 className="w-4 h-4" />
           </button>
           
-          <button className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+          <button 
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
             <Activity className="w-4 h-4" />
           </button>
+        </div>
+        
+        {/* Indicatore click */}
+        <div className="mt-2 text-center">
+          <span className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">
+            Click sulla card per vedere dettagli
+          </span>
         </div>
       </div>
     </div>
@@ -291,6 +312,9 @@ const ProjectsPage = () => {
   const [overview, setOverview] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   // Fetch dati dashboard
   const fetchDashboard = async () => {
@@ -336,9 +360,35 @@ const ProjectsPage = () => {
 
   // Handler per creare nuova attività
   const handleCreateActivity = (projectId, projectName) => {
-    // Per ora solo console log - in futuro aprirà il modale
-    console.log(`Crea attività per progetto: ${projectName} (${projectId})`);
-    alert(`Funzionalità "Crea Attività" per progetto "${projectName}" - Coming Soon!`);
+    console.log(`Apertura form attività per progetto: ${projectName} (${projectId})`);
+    
+    // Salva il progetto selezionato nello storage per la pagina attività
+    localStorage.setItem('selected_project', JSON.stringify({
+      id: projectId,
+      nome: projectName
+    }));
+    
+    // Reindirizza alla pagina attività
+    window.location.href = '/activities';
+  };
+
+  // Handler per progetto creato con successo
+  const handleProjectCreated = (newProject) => {
+    console.log('Progetto creato:', newProject);
+    // Refresh della dashboard per mostrare il nuovo progetto
+    fetchDashboard();
+  };
+
+  // Handler per aprire dettagli progetto
+  const handleProjectClick = (project) => {
+    setSelectedProject(project);
+    setShowDetailsModal(true);
+  };
+
+  // Handler per chiudere modal dettagli
+  const handleCloseDetails = () => {
+    setShowDetailsModal(false);
+    setSelectedProject(null);
   };
 
   // Render error state
@@ -380,7 +430,10 @@ const ProjectsPage = () => {
           <p className="text-gray-500 mt-1">Centro di controllo per gestione progetti e attività</p>
         </div>
 
-        <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Nuovo Progetto
         </button>
@@ -413,6 +466,7 @@ const ProjectsPage = () => {
               key={project.id} 
               project={project} 
               onCreateActivity={handleCreateActivity}
+              onProjectClick={handleProjectClick}
             />
           ))}
         </div>
@@ -424,12 +478,30 @@ const ProjectsPage = () => {
           <p className="text-gray-500 mb-6">
             Crea il tuo primo progetto per iniziare a gestire attività e task
           </p>
-          <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Crea Primo Progetto
           </button>
         </div>
       )}
+
+      {/* Modal Creazione Progetto */}
+      <CreateProjectModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onProjectCreated={handleProjectCreated}
+      />
+
+      {/* Modal Dettagli Progetto */}
+      <ProjectDetailsModal
+        project={selectedProject}
+        isOpen={showDetailsModal}
+        onClose={handleCloseDetails}
+        onCreateActivity={handleCreateActivity}
+      />
     </div>
   );
 };

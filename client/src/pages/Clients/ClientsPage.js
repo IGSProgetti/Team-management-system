@@ -156,6 +156,237 @@ const ClientCard = ({ client }) => {
   );
 };
 
+// Component CreateClientModal
+const CreateClientModal = ({ isOpen, onClose, onSubmit }) => {
+  const { user } = useAuth();
+  const [formData, setFormData] = useState({
+    nome: '',
+    descrizione: '',
+    budget: ''
+  });
+  
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset form quando si apre/chiude
+  React.useEffect(() => {
+    if (!isOpen) {
+      setFormData({ nome: '', descrizione: '', budget: '' });
+      setErrors({});
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.nome?.trim()) {
+      newErrors.nome = 'Il nome del cliente è obbligatorio';
+    }
+
+    if (formData.budget && isNaN(parseFloat(formData.budget))) {
+      newErrors.budget = 'Il budget deve essere un numero valido';
+    }
+
+    if (formData.budget && parseFloat(formData.budget) < 0) {
+      newErrors.budget = 'Il budget non può essere negativo';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Rimuovi errore se l'utente ha corretto
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const clientData = {
+        nome: formData.nome.trim(),
+        descrizione: formData.descrizione.trim() || null,
+        budget: formData.budget ? parseFloat(formData.budget) : null
+      };
+
+      // Chiamata API reale
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(clientData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Errore durante la creazione');
+      }
+
+      const result = await response.json();
+      console.log('Cliente creato:', result);
+      
+      // Notifica successo
+      const isManager = user?.ruolo === 'manager';
+      const message = isManager 
+        ? 'Cliente creato e approvato automaticamente!'
+        : 'Cliente creato! In attesa di approvazione dal manager.';
+      
+      alert(message); // Sostituire con toast
+      
+      // Chiudi modal e callback
+      onClose();
+      if (onSubmit) onSubmit(clientData);
+      
+    } catch (error) {
+      console.error('Errore creazione cliente:', error);
+      setErrors({ submit: 'Errore durante la creazione del cliente' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        
+        {/* Header */}
+        <div className="p-6 pb-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Nuovo Cliente
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            {user?.ruolo === 'manager' 
+              ? 'Il cliente sarà attivato immediatamente' 
+              : 'Il cliente dovrà essere approvato dal manager'
+            }
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6">
+          
+          {/* Nome Cliente */}
+          <div className="mb-4">
+            <label htmlFor="nome" className="block text-sm font-medium text-gray-700 mb-2">
+              Nome Cliente *
+            </label>
+            <input
+              type="text"
+              id="nome"
+              name="nome"
+              value={formData.nome}
+              onChange={handleInputChange}
+              placeholder="es. Acme Corporation, XYZ S.p.A."
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.nome ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              }`}
+              disabled={isSubmitting}
+              autoComplete="organization"
+            />
+            {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
+          </div>
+
+          {/* Descrizione */}
+          <div className="mb-4">
+            <label htmlFor="descrizione" className="block text-sm font-medium text-gray-700 mb-2">
+              Descrizione <span className="text-gray-500">(opzionale)</span>
+            </label>
+            <textarea
+              id="descrizione"
+              name="descrizione"
+              value={formData.descrizione}
+              onChange={handleInputChange}
+              rows={3}
+              placeholder="Breve descrizione del cliente e del tipo di collaborazione..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              disabled={isSubmitting}
+            />
+          </div>
+
+          {/* Budget */}
+          <div className="mb-6">
+            <label htmlFor="budget" className="block text-sm font-medium text-gray-700 mb-2">
+              Budget Totale <span className="text-gray-500">(opzionale)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">€</span>
+              <input
+                type="number"
+                id="budget"
+                name="budget"
+                value={formData.budget}
+                onChange={handleInputChange}
+                placeholder="50000"
+                min="0"
+                step="100"
+                className={`w-full pl-8 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.budget ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                }`}
+                disabled={isSubmitting}
+              />
+            </div>
+            {errors.budget && <p className="text-sm text-red-600 mt-1">{errors.budget}</p>}
+            <p className="text-xs text-gray-500 mt-1">
+              Il budget sarà utilizzato per tracciare i costi dei progetti
+            </p>
+          </div>
+
+          {/* Errore submit */}
+          {errors.submit && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{errors.submit}</p>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
+            >
+              Annulla
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crea Cliente
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // Main ClientsPage Component
 const ClientsPage = () => {
   const { user } = useAuth();
@@ -168,15 +399,29 @@ const ClientsPage = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Simuliamo il fetch dei dati
+  // Fetch clienti da API reali
   React.useEffect(() => {
     const fetchClients = async () => {
       try {
-        // TODO: Sostituire con chiamata API reale
-        // const response = await clientsAPI.getClients();
-        // setClients(response.data.clients || []);
+        const response = await fetch('/api/clients', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
         
-        // Per ora usiamo dati mock
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Clienti caricati dal database:', data.clients);
+          setClients(data.clients || []);
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Errore fetch clienti:', error);
+        console.log('Fallback ai dati demo...');
+        
+        // Fallback ai dati mock in caso di errore
         const mockClients = [
           {
             id: '1',
@@ -205,8 +450,6 @@ const ClientsPage = () => {
         ];
         
         setClients(mockClients);
-      } catch (error) {
-        console.error('Errore fetch clienti:', error);
       } finally {
         setLoading(false);
       }
@@ -379,22 +622,18 @@ const ClientsPage = () => {
         </div>
       )}
 
-      {/* Modal Creazione - TODO */}
+      {/* Modal Creazione Cliente */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Crea Nuovo Cliente</h3>
-            <p className="text-gray-600 mb-4">
-              Form di creazione cliente - prossimo step!
-            </p>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-            >
-              Chiudi
-            </button>
-          </div>
-        </div>
+        <CreateClientModal 
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={(newClient) => {
+            // Ricarica la lista clienti dopo la creazione
+            console.log('Cliente creato:', newClient);
+            // TODO: Aggiornare la lista clienti
+            window.location.reload(); // Soluzione temporanea
+          }}
+        />
       )}
 
       {/* Sezione Approvazioni Manager */}
