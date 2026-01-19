@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   Plus, Calendar, Clock, Users, BarChart3, Filter, Search,
   AlertTriangle, CheckCircle, Circle, PlayCircle, ChevronDown,
-  ChevronUp, User, Timer, Target, Calculator, Zap, X
+  ChevronUp, User, Timer, Target, Calculator, Zap, X,
+  MoreVertical  // ✨ AGGIUNGI SOLO QUESTA RIGA CON LA VIRGOLA
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
 import { useActivities, useProjects, useTasks } from '../../hooks';
@@ -39,6 +40,54 @@ const getStatusIcon = (stato) => {
     case 'programmata': return <Circle className="w-4 h-4" />;
     default: return <Circle className="w-4 h-4" />;
   }
+};
+
+// ✨ NUOVO COMPONENTE: Status Dropdown
+const StatusDropdown = ({ currentStatus, onStatusChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const statuses = [
+    { value: 'pianificata', label: 'Pianificata', icon: Circle },
+    { value: 'in_esecuzione', label: 'In Corso', icon: PlayCircle },
+    { value: 'completata', label: 'Completata', icon: CheckCircle }
+  ];
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border hover:bg-gray-50"
+      >
+        <span className={`inline-flex items-center gap-1.5 ${getStatusColor(currentStatus)}`}>
+          {getStatusIcon(currentStatus)}
+          {currentStatus === 'completata' ? 'Completata' : 
+           currentStatus === 'in_esecuzione' ? 'In Corso' : 'Pianificata'}
+        </span>
+        <ChevronDown className="w-3 h-3" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border z-10">
+          {statuses.map((status) => {
+            const Icon = status.icon;
+            return (
+              <button
+                key={status.value}
+                onClick={() => {
+                  onStatusChange(status.value);
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
+              >
+                <Icon className="w-3 h-3 mr-2" />
+                {status.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ✨ CreateTaskForm Component CON SELETTORE ORE/MINUTI
@@ -561,7 +610,7 @@ const TasksList = ({ activityId, activityName, isExpanded, onCreateTask }) => {
 };
 
 // ActivityCard AGGIORNATA con tempi automatici - MANTIENE TUTTE LE FUNZIONALITÀ
-const ActivityCard = ({ activity, onCreateTask }) => {
+  const ActivityCard = ({ activity, onCreateTask, onStatusChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const progress = calculateProgress(activity);
   const isOverdue = new Date(activity.scadenza) < new Date() && activity.stato !== 'completata';
@@ -597,11 +646,10 @@ const ActivityCard = ({ activity, onCreateTask }) => {
             </p>
           </div>
           
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${getStatusColor(activity.stato)}`}>
-            {getStatusIcon(activity.stato)}
-            {activity.stato === 'completata' ? 'Completata' : 
-             activity.stato === 'in_esecuzione' ? 'In Corso' : 'Pianificata'}
-          </span>
+          <StatusDropdown 
+  currentStatus={activity.stato}
+  onStatusChange={(newStatus) => onStatusChange(activity.id, newStatus)}
+/>
         </div>
 
         {activity.numero_task > 0 && (
@@ -737,6 +785,19 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
             </option>
           ))}
         </select>
+        
+        <select
+  value={filters.cliente || ''}
+  onChange={(e) => setFilters({ ...filters, cliente: e.target.value || undefined })}
+  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+>
+  <option value="">Tutti i clienti</option>
+  {[...new Set(projects.map(p => p.cliente_nome))].filter(Boolean).map((clienteNome) => (
+    <option key={clienteNome} value={clienteNome}>
+      {clienteNome}
+    </option>
+  ))}
+</select>
 
         <select
           value={filters.stato || ''}
@@ -765,12 +826,12 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
   );
 };
 
-// CreateActivityForm Component - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
-const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
+// CreateActivityForm Component - MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI + PROGETTO PRE-SELEZIONATO
+const CreateActivityForm = ({ projects, preselectedProject, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     nome: '',
     descrizione: '',
-    progetto_id: '',
+    progetto_id: preselectedProject?.id || '', // ✨ Pre-compila se disponibile
     scadenza: '',
     risorse_assegnate: []
   });
@@ -837,6 +898,23 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      {/* ✨ Messaggio se progetto pre-selezionato */}
+      {preselectedProject && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
+            <div>
+              <div className="font-medium text-green-900">
+                Creazione attività per progetto: {preselectedProject.nome}
+              </div>
+              <div className="text-sm text-green-700">
+                Il progetto è già selezionato. Compila gli altri campi per creare l'attività.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Info Box Tempi Automatici */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -864,6 +942,7 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
             errors.nome ? 'border-red-300' : 'border-gray-300'
           }`}
           placeholder="Es: Sviluppo Login Component"
+          autoFocus // ✨ Focus automatico sul primo campo
         />
         {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
       </div>
@@ -879,6 +958,7 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
             errors.progetto_id ? 'border-red-300' : 'border-gray-300'
           }`}
+          disabled={!!preselectedProject} // ✨ Disabilita se pre-selezionato
         >
           <option value="">Seleziona progetto...</option>
           {projects.map(project => (
@@ -992,18 +1072,36 @@ const CreateActivityForm = ({ projects, onClose, onSuccess }) => {
   );
 };
 
-// COMPONENTE PRINCIPALE MANTIENE TUTTE LE FUNZIONALITÀ ESISTENTI
+// ✨ COMPONENTE PRINCIPALE CON SUPPORTO PROGETTO PRE-SELEZIONATO
 const ActivitiesPage = () => {
   const { user } = useAuth();
   const [filters, setFilters] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [preselectedProject, setPreselectedProject] = useState(null); // ✨ Nuovo stato
 
   const { activities, isLoading: activitiesLoading } = useActivities(filters);
   const { projects, isLoading: projectsLoading } = useProjects();
 
   const isManager = user?.ruolo === 'manager';
+
+  // ✨ Controlla se c'è un progetto pre-selezionato dalla dashboard progetti
+  React.useEffect(() => {
+    const selectedProject = localStorage.getItem('selected_project');
+    if (selectedProject) {
+      try {
+        const projectData = JSON.parse(selectedProject);
+        setPreselectedProject(projectData);
+        setShowCreateModal(true); // Apri automaticamente il modal
+        // Rimuovi dal localStorage dopo aver utilizzato
+        localStorage.removeItem('selected_project');
+      } catch (error) {
+        console.error('Errore parsing selected_project:', error);
+        localStorage.removeItem('selected_project');
+      }
+    }
+  }, []);
 
   const handleCreateTask = (activityId, activityName) => {
     setSelectedActivity({ id: activityId, nome: activityName });
@@ -1015,6 +1113,35 @@ const ActivitiesPage = () => {
     setSelectedActivity(null);
     // Le task si aggiorneranno automaticamente grazie a React Query
   };
+
+  // ✨ Handler aggiornato per gestire il reset del progetto pre-selezionato
+  const handleActivityCreated = () => {
+    setShowCreateModal(false);
+    setPreselectedProject(null); // Reset del progetto pre-selezionato
+  };
+
+  // ✨ NUOVO HANDLER: Cambio stato attività  
+const handleActivityStatusChange = async (activityId, newStatus) => {
+  try {
+    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+    const token = authData.state?.token;
+
+    const response = await fetch(`/api/activities/${activityId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ stato: newStatus })
+    });
+
+    if (response.ok) {
+      window.location.reload();
+    }
+  } catch (error) {
+    console.error('Errore cambio stato:', error);
+  }
+};
 
   if (activitiesLoading || projectsLoading) {
     return (
@@ -1100,12 +1227,13 @@ const ActivitiesPage = () => {
       {activities.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {activities.map((activity) => (
-            <ActivityCard 
-              key={activity.id} 
-              activity={activity} 
-              onCreateTask={handleCreateTask}
-            />
-          ))}
+          <ActivityCard 
+          key={activity.id} 
+          activity={activity} 
+          onCreateTask={handleCreateTask}
+          onStatusChange={handleActivityStatusChange}
+        />
+))}
         </div>
       ) : (
         <div className="text-center py-12">
@@ -1133,7 +1261,7 @@ const ActivitiesPage = () => {
         </div>
       )}
 
-      {/* Modal Creazione Attività */}
+      {/* ✨ Modal Creazione Attività con supporto progetto pre-selezionato */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -1141,7 +1269,10 @@ const ActivitiesPage = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-semibold text-gray-900">Crea Nuova Attività</h3>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setPreselectedProject(null); // ✨ Reset anche qui
+                  }}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="w-6 h-6" />
@@ -1150,11 +1281,13 @@ const ActivitiesPage = () => {
             </div>
 
             <CreateActivityForm 
-              projects={projects} 
-              onClose={() => setShowCreateModal(false)}
-              onSuccess={() => {
+              projects={projects}
+              preselectedProject={preselectedProject} // ✨ Passa il progetto pre-selezionato
+              onClose={() => {
                 setShowCreateModal(false);
+                setPreselectedProject(null); // ✨ Reset progetto
               }}
+              onSuccess={handleActivityCreated} // ✨ Handler aggiornato
             />
           </div>
         </div>

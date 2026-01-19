@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   Plus, Calendar, Clock, Users, BarChart3, Filter, Search,
   AlertTriangle, CheckCircle, Circle, PlayCircle, ChevronDown,
-  ChevronUp, User, Timer, Target, Calculator, Zap, X
+  ChevronUp, User, Timer, Target, Calculator, Zap, X,
+  MoreVertical  // ✨ AGGIUNGI SOLO QUESTA RIGA CON LA VIRGOLA
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
 import { useActivities, useProjects, useTasks } from '../../hooks';
@@ -39,6 +40,54 @@ const getStatusIcon = (stato) => {
     case 'programmata': return <Circle className="w-4 h-4" />;
     default: return <Circle className="w-4 h-4" />;
   }
+};
+
+// ✨ NUOVO COMPONENTE: Status Dropdown
+const StatusDropdown = ({ currentStatus, onStatusChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const statuses = [
+    { value: 'pianificata', label: 'Pianificata', icon: Circle },
+    { value: 'in_esecuzione', label: 'In Corso', icon: PlayCircle },
+    { value: 'completata', label: 'Completata', icon: CheckCircle }
+  ];
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border hover:bg-gray-50"
+      >
+        <span className={`inline-flex items-center gap-1.5 ${getStatusColor(currentStatus)}`}>
+          {getStatusIcon(currentStatus)}
+          {currentStatus === 'completata' ? 'Completata' : 
+           currentStatus === 'in_esecuzione' ? 'In Corso' : 'Pianificata'}
+        </span>
+        <ChevronDown className="w-3 h-3" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border z-10">
+          {statuses.map((status) => {
+            const Icon = status.icon;
+            return (
+              <button
+                key={status.value}
+                onClick={() => {
+                  onStatusChange(status.value);
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
+              >
+                <Icon className="w-3 h-3 mr-2" />
+                {status.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ✨ CreateTaskForm Component CON SELETTORE ORE/MINUTI
@@ -561,7 +610,7 @@ const TasksList = ({ activityId, activityName, isExpanded, onCreateTask }) => {
 };
 
 // ActivityCard AGGIORNATA con tempi automatici - MANTIENE TUTTE LE FUNZIONALITÀ
-const ActivityCard = ({ activity, onCreateTask }) => {
+  const ActivityCard = ({ activity, onCreateTask, onStatusChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const progress = calculateProgress(activity);
   const isOverdue = new Date(activity.scadenza) < new Date() && activity.stato !== 'completata';
@@ -597,11 +646,10 @@ const ActivityCard = ({ activity, onCreateTask }) => {
             </p>
           </div>
           
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${getStatusColor(activity.stato)}`}>
-            {getStatusIcon(activity.stato)}
-            {activity.stato === 'completata' ? 'Completata' : 
-             activity.stato === 'in_esecuzione' ? 'In Corso' : 'Pianificata'}
-          </span>
+          <StatusDropdown 
+  currentStatus={activity.stato}
+  onStatusChange={(newStatus) => onStatusChange(activity.id, newStatus)}
+/>
         </div>
 
         {activity.numero_task > 0 && (
@@ -721,7 +769,7 @@ const ActivityCard = ({ activity, onCreateTask }) => {
 };
 
 // MANTIENE TUTTI GLI ALTRI COMPONENTI ESISTENTI INVARIATI
-const ActivityFilters = ({ filters, setFilters, projects }) => {
+const ActivityFilters = ({ filters, setFilters, projects, activities }) => {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -737,6 +785,24 @@ const ActivityFilters = ({ filters, setFilters, projects }) => {
             </option>
           ))}
         </select>
+        
+        <select
+  value={filters.cliente_nome || ''}
+  onChange={(e) => setFilters({ ...filters, cliente_nome: e.target.value || undefined })}
+  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+>
+  <option value="">Tutti i clienti</option>
+  {(activities || [])
+    .map(a => a.cliente_nome)
+    .filter((nome, index, arr) => nome && arr.indexOf(nome) === index)
+    .sort()
+    .map((clienteNome) => (
+      <option key={clienteNome} value={clienteNome}>
+        {clienteNome}
+      </option>
+    ))
+  }
+</select>
 
         <select
           value={filters.stato || ''}
@@ -1059,6 +1125,29 @@ const ActivitiesPage = () => {
     setPreselectedProject(null); // Reset del progetto pre-selezionato
   };
 
+  // ✨ NUOVO HANDLER: Cambio stato attività  
+const handleActivityStatusChange = async (activityId, newStatus) => {
+  try {
+    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+    const token = authData.state?.token;
+
+    const response = await fetch(`/api/activities/${activityId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ stato: newStatus })
+    });
+
+    if (response.ok) {
+      window.location.reload();
+    }
+  } catch (error) {
+    console.error('Errore cambio stato:', error);
+  }
+};
+
   if (activitiesLoading || projectsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1091,10 +1180,11 @@ const ActivitiesPage = () => {
       </div>
 
       <ActivityFilters 
-        filters={filters} 
-        setFilters={setFilters} 
-        projects={projects} 
-      />
+  filters={filters} 
+  setFilters={setFilters} 
+  projects={projects}
+  activities={activities}
+/>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
@@ -1140,41 +1230,42 @@ const ActivitiesPage = () => {
         </div>
       </div>
 
-      {activities.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {activities.map((activity) => (
-            <ActivityCard 
-              key={activity.id} 
-              activity={activity} 
-              onCreateTask={handleCreateTask}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <Calculator className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Nessuna attività trovata</h3>
-          <p className="text-gray-500 mb-2">
-            {Object.keys(filters).length > 0 
-              ? 'Prova a modificare i filtri di ricerca'
-              : isManager 
-              ? 'Le attività avranno tempi calcolati automaticamente dalle task'
-              : 'Non hai ancora attività assegnate'
-            }
-          </p>
-          <p className="text-xs text-blue-600 mb-6">
-            ✨ Ore preventivate ed effettive sono ora calcolate automaticamente!
-          </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg 
-                     hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Crea Prima Attività
-          </button>
-        </div>
-      )}
+      {(() => {
+  // Filtro attività per cliente se selezionato
+  const filteredActivities = filters.cliente_nome 
+    ? activities.filter(activity => activity.cliente_nome === filters.cliente_nome)
+    : activities;
+    
+  return filteredActivities.length > 0 ? (
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      {filteredActivities.map((activity) => (
+        <ActivityCard 
+          key={activity.id} 
+          activity={activity} 
+          onCreateTask={handleCreateTask}
+          onStatusChange={handleActivityStatusChange}
+        />
+      ))}
+    </div>
+  ) : (
+    <div className="text-center py-12">
+      <Calculator className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Nessuna attività trovata</h3>
+      <p className="text-gray-500 mb-2">
+        {filters.cliente_nome ? 
+          `Nessuna attività trovata per il cliente "${filters.cliente_nome}"` :
+          'Prova a modificare i filtri di ricerca'
+        }
+      </p>
+      <button
+        onClick={() => setFilters({})}
+        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        Cancella filtri
+      </button>
+    </div>
+  );
+})()}
 
       {/* ✨ Modal Creazione Attività con supporto progetto pre-selezionato */}
       {showCreateModal && (
