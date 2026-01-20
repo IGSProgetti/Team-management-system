@@ -244,13 +244,21 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
     setIsSubmitting(true);
     
     try {
-      // Chiamata API reale
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
+  // ✅ CORREZIONE: Ottieni il token dall'auth-storage
+  const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+  const token = authData.state?.token;
+
+  if (!token) {
+    throw new Error('Token non trovato - effettua il login');
+  }
+
+  // Chiamata API reale
+  const response = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`, // ✅ Ora usa il token corretto
+      'Content-Type': 'application/json'
+    },
         body: JSON.stringify({
           nome: formData.nome.trim(),
           email: formData.email.trim(),
@@ -550,14 +558,22 @@ const UsersPage = () => {
 
   // Fetch utenti da API
   React.useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
+  const fetchUsers = async () => {
+    try {
+      // ✅ CORREZIONE: Usa il token dall'auth-storage
+      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+      const token = authData.state?.token;
+
+      if (!token) {
+        throw new Error('Token non trovato - effettua il login');
+      }
+
+      const response = await fetch('/api/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`, // ✅ Ora usa il token corretto
+          'Content-Type': 'application/json'
+        }
+      });
         
         if (response.ok) {
           const data = await response.json();
