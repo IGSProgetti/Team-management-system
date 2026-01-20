@@ -24,10 +24,11 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
       params.push(attivita_id);
     }
 
-    if (stato) {
-      whereClause += ' AND t.stato = $' + (params.length + 1);
-      params.push(stato);
-    }
+    // Gestisci filtro stato - ignora se "all"
+if (stato && stato !== 'all') {
+  whereClause += ' AND t.stato = $' + (params.length + 1);
+  params.push(stato);
+}
 
     if (utente_assegnato && req.user.ruolo === 'manager') {
       whereClause += ' AND t.utente_assegnato = $' + (params.length + 1);

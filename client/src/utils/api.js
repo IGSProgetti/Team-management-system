@@ -220,11 +220,9 @@ export const dashboardAPI = {
   getProjectsPerformance: (params = {}) => 
     api.get('/dashboard/projects-performance', { params }),
   
-  getPendingApprovals: () => 
-    api.get('/dashboard/pending-approvals'),
-  
-  getHoursAnalytics: (params = {}) => 
-    api.get('/dashboard/hours-analytics', { params }),
+  // AGGIUNGI QUESTO:
+  getUserDetail: (userId) => 
+    api.get(`/dashboard/user-detail/${userId}`),
 };
 
 // Calendar API

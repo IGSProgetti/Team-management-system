@@ -196,10 +196,10 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
       const taskCollegataConfigJSON = task_collegata_config ? JSON.stringify(task_collegata_config) : null;
 
       const taskResult = await client.query(`
-        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, task_collegata_config, creata_da)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_config, creata_da)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
-      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, taskCollegataConfigJSON, req.user.id]);
+      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_config ? JSON.stringify(task_collegata_config) : null, req.user.id]);
 
       const task = taskResult.rows[0];
 
@@ -404,6 +404,7 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
         (SELECT nome FROM utenti WHERE id = task.utente_assegnato) as utente_nome
       `, params);
 
+
       if (result.rows.length === 0) {
         throw new Error('Task not found, already completed, or access denied');
       }
@@ -416,7 +417,7 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
         
         try {
           // Parsifica la configurazione JSON
-          const linkedConfig = JSON.parse(task.task_collegata_config);
+          const linkedConfig = task.task_collegata_config; // Già un oggetto JavaScript!
           console.log('📋 Configurazione task collegata:', linkedConfig);
           
           // Ottieni i dettagli della task madre per ereditare attività/progetto
@@ -509,6 +510,49 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
   } catch (error) {
     console.error('Complete task error:', error);
     res.status(500).json({ error: 'Server Error', details: error.message || 'Failed to complete task' });
+  }
+});
+
+// DELETE /api/tasks/:id - Elimina task (solo manager o utente assegnato)
+router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verifica permessi: solo manager o utente assegnato
+    let permissionCheck = '';
+    let params = [id];
+
+    if (req.user.ruolo === 'risorsa') {
+      permissionCheck = ' AND utente_assegnato = $2';
+      params.push(req.user.id);
+    }
+
+    const result = await query(`
+      DELETE FROM task 
+      WHERE id = $1 ${permissionCheck}
+      RETURNING id, nome
+    `, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Not Found', 
+        details: 'Task not found or access denied' 
+      });
+    }
+
+    console.log(`🗑️ Task eliminata: ${result.rows[0].nome}`);
+
+    res.json({
+      message: 'Task deleted successfully',
+      task: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Delete task error:', error);
+    res.status(500).json({ 
+      error: 'Server Error', 
+      details: 'Failed to delete task' 
+    });
   }
 });
 
