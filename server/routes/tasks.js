@@ -513,4 +513,47 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
   }
 });
 
+// DELETE /api/tasks/:id - Elimina task (solo manager o utente assegnato)
+router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verifica permessi: solo manager o utente assegnato
+    let permissionCheck = '';
+    let params = [id];
+
+    if (req.user.ruolo === 'risorsa') {
+      permissionCheck = ' AND utente_assegnato = $2';
+      params.push(req.user.id);
+    }
+
+    const result = await query(`
+      DELETE FROM task 
+      WHERE id = $1 ${permissionCheck}
+      RETURNING id, nome
+    `, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Not Found', 
+        details: 'Task not found or access denied' 
+      });
+    }
+
+    console.log(`🗑️ Task eliminata: ${result.rows[0].nome}`);
+
+    res.json({
+      message: 'Task deleted successfully',
+      task: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Delete task error:', error);
+    res.status(500).json({ 
+      error: 'Server Error', 
+      details: 'Failed to delete task' 
+    });
+  }
+});
+
 module.exports = router;

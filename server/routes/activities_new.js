@@ -91,25 +91,25 @@ router.post('/', authenticateToken, requireResource, validateActivity, async (re
     await transaction(async (client) => {
       // Verifica permessi sul progetto
       const projectCheck = await client.query(`
-        SELECT id, stato_approvazione 
-        FROM progetti 
-        WHERE id = $1 AND (
-          stato_approvazione = 'approvata' OR 
-          ($2 = 'manager') OR 
-          creato_da_risorsa = $3
-        )
-      `, [progetto_id, req.user.ruolo, req.user.id]);
+  SELECT p.id, p.stato_approvazione 
+  FROM progetti p
+  WHERE p.id = $1 AND (
+    p.stato_approvazione = 'approvata' OR 
+    $2 = 'manager' OR 
+    p.creato_da = $3
+  )
+`, [progetto_id, req.user.ruolo, req.user.id]);
 
       if (projectCheck.rows.length === 0) {
         throw new Error('Project not found or access denied');
       }
 
       // Crea attività
-      const activityResult = await client.query(`
-        INSERT INTO attivita (nome, descrizione, progetto_id, ore_stimate, scadenza)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-      `, [nome, descrizione, progetto_id, ore_stimate, scadenza]);
+const activityResult = await client.query(`
+  INSERT INTO attivita (nome, descrizione, progetto_id, ore_stimate, scadenza, creata_da)
+  VALUES ($1, $2, $3, $4, $5, $6)
+  RETURNING *
+`, [nome, descrizione, progetto_id, ore_stimate, scadenza, req.user.id]);
 
       const activity = activityResult.rows[0];
 

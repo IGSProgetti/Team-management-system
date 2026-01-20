@@ -477,19 +477,26 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
   }, [isOpen]);
 
   const loadUsers = async () => {
-    setLoadingUsers(true);
     try {
-      // Qui dovremo implementare l'API per caricare gli utenti
-      // Per ora simuliamo
-      setUsers([
-        { id: '1', nome: 'Mario Rossi' },
-        { id: '2', nome: 'Anna Verdi' },
-        { id: '3', nome: 'Test Manager' }
-      ]);
+      // Carica utenti reali dal nuovo endpoint /list
+      const response = await fetch('/api/users/list', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('👥 Utenti caricati dinamicamente:', data.users);
+        setUsers(data.users || []);
+      } else {
+        console.error('Errore nel caricamento utenti - Status:', response.status);
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Errore caricamento utenti:', error);
-    } finally {
-      setLoadingUsers(false);
+      setUsers([]);
     }
   };
 
@@ -737,7 +744,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     scadenza_ora: '',
     attivita_id: '', // Campo per l'attività selezionata
     priorita: 'medium',
-     task_collegata_nome: '',  // ← AGGIUNGI QUESTA RIGA
+    task_collegata_config: null,  // ← CAMBIA QUESTA RIGA
     // FALLBACK: Campi per creazione al volo se non ci sono attività
     progetto_nome: 'Sistema Management',
     cliente_nome: 'Acme Corporation'
@@ -748,6 +755,8 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
   const [availableActivities, setAvailableActivities] = useState([]); // Attività disponibili
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [showCreateOnTheFly, setShowCreateOnTheFly] = useState(false); // Modal per creazione al volo
+  const [showLinkedTaskModal, setShowLinkedTaskModal] = useState(false);
+  const [users, setUsers] = useState([]);
 
   // Carica attività disponibili quando si apre il modal
   useEffect(() => {
@@ -774,6 +783,37 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
       setLoadingActivities(false);
     }
   };
+
+  // Carica utenti per task collegata
+  const loadUsers = async () => {
+    try {
+      // Per ora simuliamo, poi implementeremo l'API reale
+      setUsers([
+        { id: '1', nome: 'Mario Rossi' },
+        { id: '2', nome: 'Anna Verdi' },
+        { id: '3', nome: 'Test Manager' }
+      ]);
+    } catch (error) {
+      console.error('Errore caricamento utenti:', error);
+    }
+  };
+
+  // Gestione salvataggio configurazione task collegata
+  const handleSaveLinkedTask = (linkedTaskConfig) => {
+    setFormData(prev => ({
+      ...prev,
+      task_collegata_config: linkedTaskConfig
+    }));
+    setShowLinkedTaskModal(false);
+  };
+
+  // Carica utenti quando si apre il modal principale
+  useEffect(() => {
+    if (isOpen) {
+      loadAvailableActivities();
+      loadUsers(); // Aggiungi questa chiamata
+    }
+  }, [isOpen]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -851,7 +891,9 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           create_on_the_fly: true,
           cliente_nome: formData.cliente_nome,
           progetto_nome: formData.progetto_nome,
-          attivita_nome: `Attività per ${formData.nome}` // Genera nome attività
+          attivita_nome: `Attività per ${formData.nome}`, // Genera nome attività
+          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
+          task_collegata_config: formData.task_collegata_config
         };
       } else {
         // MODALITÀ NORMALE: Usa attività esistente
@@ -862,6 +904,8 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
           attivita_id: formData.attivita_id,
           utente_assegnato: user.id,
+          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
+          task_collegata_config: formData.task_collegata_config
         };
       }
       
@@ -878,7 +922,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
         scadenza_ora: '',
         attivita_id: '',
         priorita: 'medium',
-        task_collegata_nome: '',  // ← AGGIUNGI ANCHE QUI
+        task_collegata_config: null,  // ← CAMBIATO
         progetto_nome: 'Sistema Management',
         cliente_nome: 'Acme Corporation'
       });
@@ -934,21 +978,53 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               />
             </div>
 
-            {/* Task Collegata */}
+            {/* Task Collegata - Configurazione Avanzata */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Task Collegata (Opzionale)
               </label>
-              <input
-                type="text"
-                name="task_collegata_nome"
-                value={formData.task_collegata_nome || ''}
-                onChange={handleInputChange}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Task da creare automaticamente al completamento..."
-              />
+              
+              {formData.task_collegata_config ? (
+                // Mostra riepilogo task collegata configurata
+                <div className="border border-green-200 bg-green-50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-green-800">Task Collegata Configurata</h4>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, task_collegata_config: null }))}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="text-sm text-green-700">
+                    <p><strong>Nome:</strong> {formData.task_collegata_config.nome}</p>
+                    <p><strong>Assegnata a:</strong> {users.find(u => u.id === formData.task_collegata_config.utente_assegnato)?.nome || 'N/A'}</p>
+                    <p><strong>Ore stimate:</strong> {formatMinutesToHours(formData.task_collegata_config.ore_stimate)}</p>
+                    <p><strong>Scadenza:</strong> {formData.task_collegata_config.scadenza_data} {formData.task_collegata_config.scadenza_ora}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkedTaskModal(true)}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Modifica configurazione
+                  </button>
+                </div>
+              ) : (
+                // Pulsante per configurare task collegata
+                <button
+                  type="button"
+                  onClick={() => setShowLinkedTaskModal(true)}
+                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors text-sm flex items-center justify-center"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Configura Task Collegata
+                </button>
+              )}
+              
               <p className="text-xs text-gray-500 mt-1">
-                Se specifichi un nome, questa task verrà creata automaticamente quando completi la task corrente
+                La task collegata verrà creata automaticamente quando completi questa task
               </p>
             </div>
 
@@ -1210,6 +1286,15 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
             </button>
           </div>
         </form>
+
+      {/* Modal Task Collegata */}
+        <ConfigureLinkedTaskModal
+          isOpen={showLinkedTaskModal}
+          onClose={() => setShowLinkedTaskModal(false)}
+          onSave={handleSaveLinkedTask}
+          parentTask={formData}
+        />
+
       </div>
     </div>
   );

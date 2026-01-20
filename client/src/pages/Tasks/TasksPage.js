@@ -37,7 +37,7 @@ const formatDateTime = (dateString) => {
 };
 
 // TaskCard Component
-const TaskCard = ({ task, onComplete, onEdit }) => {
+const TaskCard = ({ task, onComplete, onEdit, onDelete }) => {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'urgent': return 'bg-red-100 text-red-800 border-red-200';
@@ -176,7 +176,7 @@ const TaskCard = ({ task, onComplete, onEdit }) => {
         <span>{task.utente_nome}</span>
       </div>
 
-      {/* Azioni */}
+      {/* Azioni Avanzate */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-200">
         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(task.stato)}`}>
           {task.stato === 'programmata' ? 'Da Fare' :
@@ -184,26 +184,57 @@ const TaskCard = ({ task, onComplete, onEdit }) => {
         </span>
         
         <div className="flex gap-1">
-          {task.stato !== 'completata' && (
-            <>
-              {task.stato === 'programmata' && (
-                <button
-                  onClick={() => onEdit(task, 'in_esecuzione')}
-                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Inizia
-                </button>
-              )}
-              {task.stato === 'in_esecuzione' && (
-                <button
-                  onClick={() => onComplete(task)}
-                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  Completa
-                </button>
-              )}
-            </>
-          )}
+          {/* Menu Dropdown Stati */}
+          <div className="relative group">
+            <button className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center gap-1">
+              Cambia Stato
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+            
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+              <div className="py-1 min-w-32">
+                {task.stato !== 'programmata' && (
+                  <button
+                    onClick={() => onEdit(task, 'programmata')}
+                    className="w-full px-3 py-1 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    Da Fare
+                  </button>
+                )}
+                {task.stato !== 'in_esecuzione' && (
+                  <button
+                    onClick={() => onEdit(task, 'in_esecuzione')}
+                    className="w-full px-3 py-1 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    In Corso
+                  </button>
+                )}
+                {task.stato !== 'completata' && (
+                  <button
+                    onClick={() => task.stato === 'in_esecuzione' ? onComplete(task) : onEdit(task, 'completata')}
+                    className="w-full px-3 py-1 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Completata
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Pulsante Elimina */}
+          <button
+            onClick={() => onDelete && onDelete(task)}
+            className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+            title="Elimina task"
+          >
+            🗑️
+          </button>
         </div>
       </div>
     </div>
@@ -1428,6 +1459,33 @@ const TasksPage = () => {
     console.log(`📝 Task "${task.nome}" spostata in: ${newStatus}`);
   };
 
+  const handleDeleteTask = (task) => {
+    if (window.confirm(`Sei sicuro di voler eliminare la task "${task.nome}"?`)) {
+      console.log('🗑️ Eliminazione task:', task.nome);
+      
+      fetch(`/api/tasks/${task.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(r => {
+        if (r.ok) {
+          console.log('✅ Task eliminata con successo');
+          window.location.reload(); // Ricarica la pagina per aggiornare la lista
+        } else {
+          console.error('❌ Errore eliminazione task');
+          alert('Errore nell\'eliminazione della task');
+        }
+      })
+      .catch(err => {
+        console.error('❌ Errore rete:', err);
+        alert('Errore di connessione');
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1528,77 +1586,84 @@ const TasksPage = () => {
       </div>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex gap-6 min-w-max pb-6">
-          {/* Programmate Column */}
-          <div className="w-80 flex-shrink-0">
-            <KanbanColumn
-              title="Da Fare"
-              status="programmata"
-              tasks={filteredTasksByStatus.programmata}
-              count={filteredTasksByStatus.programmata.length}
-              onAddTask={() => setShowCreateModal(true)} // FIX: Collega sempre al modal
-            >
-              {filteredTasksByStatus.programmata.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onEdit={handleStatusChange}
-                />
-              ))}
-            </KanbanColumn>
-          </div>
+<div className="flex-1 overflow-x-auto">
+  <div className="flex gap-6 min-w-max pb-6">
+    
+    {/* 1️⃣ Programmate Column - DA FARE */}
+    <div className="w-80 flex-shrink-0">
+      <KanbanColumn
+        title="Da Fare"
+        status="programmata"
+        tasks={filteredTasksByStatus.programmata}
+        count={filteredTasksByStatus.programmata.length}
+        onAddTask={() => setShowCreateModal(true)}
+      >
+        {filteredTasksByStatus.programmata.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onEdit={handleStatusChange}
+            onDelete={handleDeleteTask}
+          />
+        ))}
+      </KanbanColumn>
+    </div>
 
-          {/* In Esecuzione Column */}
-          <div className="w-80 flex-shrink-0">
-            <KanbanColumn
-              title="In Corso"
-              status="in_esecuzione"
-              tasks={filteredTasksByStatus.in_esecuzione}
-              count={filteredTasksByStatus.in_esecuzione.length}
-              onAddTask={() => setShowCreateModal(true)} // FIX: Collega al modal
-            >
-              {filteredTasksByStatus.in_esecuzione.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={handleCompleteTask}
-                  onEdit={handleStatusChange}
-                />
-              ))}
-            </KanbanColumn>
-          </div>
+    {/* 2️⃣ In Esecuzione Column - IN CORSO */}
+    <div className="w-80 flex-shrink-0">
+      <KanbanColumn
+        title="In Corso"
+        status="in_esecuzione"
+        tasks={filteredTasksByStatus.in_esecuzione}
+        count={filteredTasksByStatus.in_esecuzione.length}
+        onAddTask={() => setShowCreateModal(true)}
+      >
+        {filteredTasksByStatus.in_esecuzione.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onComplete={handleCompleteTask}
+            onEdit={handleStatusChange}
+            onDelete={handleDeleteTask}
+          />
+        ))}
+      </KanbanColumn>
+    </div>
 
-          {/* Completate Column - Mostra sempre vuota quando i filtri sono attivi */}
-          <div className="w-80 flex-shrink-0">
-            <KanbanColumn
-              title="Completate"
-              status="completata"
-              tasks={tasksByStatus.completata} // Usa tasksByStatus originale solo per il conteggio
-              count={activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth ? 0 : tasksByStatus.completata.length}
-              onAddTask={() => setShowCreateModal(true)} // FIX: Collega al modal
-            >
-              {/* Mostra task completate solo se nessun filtro temporale è attivo */}
-              {(!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) && 
-                tasksByStatus.completata.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                  />
-                ))
-              }
-              
-              {/* Messaggio quando i filtri temporali sono attivi */}
-              {(activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth) && (
-                <div className="text-center text-gray-500 text-sm py-8">
-                  <p>Le task completate sono</p>
-                  <p>nascoste nei filtri temporali</p>
-                </div>
-              )}
-            </KanbanColumn>
+    {/* 3️⃣ Completate Column - COMPLETATE */}
+    <div className="w-80 flex-shrink-0">
+      <KanbanColumn
+        title="Completate"
+        status="completata"
+        tasks={tasksByStatus.completata}
+        count={activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth ? 0 : tasksByStatus.completata.length}
+        onAddTask={() => setShowCreateModal(true)}
+      >
+        {/* Mostra task completate solo se nessun filtro temporale è attivo */}
+        {(!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) && 
+          tasksByStatus.completata.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onComplete={handleCompleteTask}
+              onEdit={handleStatusChange}
+              onDelete={handleDeleteTask}
+            />
+          ))
+        }
+        
+        {/* Messaggio quando i filtri temporali sono attivi */}
+        {(activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth) && (
+          <div className="text-center text-gray-500 text-sm py-8">
+            <p>Le task completate sono</p>
+            <p>nascoste nei filtri temporali</p>
           </div>
-        </div>
-      </div>
+        )}
+      </KanbanColumn>
+    </div>
+
+  </div>
+</div>
 
       {/* Complete Task Modal */}
       <CompleteTaskModal
