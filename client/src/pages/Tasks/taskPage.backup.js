@@ -452,283 +452,6 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
   );
 };
 
-// Modal per configurare Task Collegata - COMPLETO
-const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
-  const [linkedTaskData, setLinkedTaskData] = useState({
-    nome: '',
-    descrizione: '',
-    ore_stimate: '',
-    stimate_mode: 'minutes',
-    scadenza_data: '',
-    scadenza_ora: '',
-    utente_assegnato: '',
-    priorita: 'medium'
-  });
-  
-  const [errors, setErrors] = useState({});
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-
-  // Carica utenti disponibili
-  useEffect(() => {
-    if (isOpen) {
-      loadUsers();
-    }
-  }, [isOpen]);
-
-  const loadUsers = async () => {
-    try {
-      // Utenti reali dal database con UUID corretti
-      const realUsers = [
-        { id: '3b80691f-07ee-47ed-ad93-729aace6b52f', nome: 'Mario Rossi' },
-        { id: 'a70a2261-a145-4239-bd38-157139f9e02a', nome: 'Test Manager' },
-        { id: '1d237e1b-58c0-4e42-bcf3-36799a64c074', nome: 'Manager Sistema' },
-        { id: '0b99be51-7468-4217-8c96-70820ee30459', nome: 'Risorsa manuale' },
-        { id: '2d0e0a02-38c3-457e-94b9-fbd6076e7eb6', nome: 'Utente prova oggi' },
-        { id: '88e88c2b-f1ec-4a97-9143-2033e7476626', nome: 'Test Manager' },
-        { id: 'ad75bff2-30f5-4f0f-9803-b805b450e132', nome: 'Test User Nuovo' }
-      ];
-      
-      console.log('👥 Utenti caricati dal database:', realUsers);
-      setUsers(realUsers);
-    } catch (error) {
-      console.error('Errore caricamento utenti:', error);
-      setUsers([]);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Validazione
-    const newErrors = {};
-    if (!linkedTaskData.nome.trim()) newErrors.nome = 'Il nome è obbligatorio';
-    if (!linkedTaskData.ore_stimate) newErrors.ore_stimate = 'Le ore stimate sono obbligatorie';
-    if (!linkedTaskData.scadenza_data) newErrors.scadenza_data = 'La data di scadenza è obbligatoria';
-    if (!linkedTaskData.scadenza_ora) newErrors.scadenza_ora = 'L\'orario di scadenza è obbligatorio';
-    if (!linkedTaskData.utente_assegnato) newErrors.utente_assegnato = 'Seleziona un utente';
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    // Converti ore in minuti
-    let oreStimateInMinuti;
-    if (linkedTaskData.stimate_mode === 'hours') {
-      oreStimateInMinuti = Math.round(parseFloat(linkedTaskData.ore_stimate) * 60);
-    } else {
-      oreStimateInMinuti = parseInt(linkedTaskData.ore_stimate);
-    }
-
-    const taskCollegataConfig = {
-      ...linkedTaskData,
-      ore_stimate: oreStimateInMinuti,
-      scadenza: `${linkedTaskData.scadenza_data}T${linkedTaskData.scadenza_ora}:00.000Z`
-    };
-
-    onSave(taskCollegataConfig);
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit}>
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Configura Task Collegata</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Si creerà automaticamente quando completi: <strong>{parentTask?.nome}</strong>
-              </p>
-            </div>
-            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Nome Task Collegata */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nome Task *</label>
-              <input
-                type="text"
-                value={linkedTaskData.nome}
-                onChange={(e) => setLinkedTaskData(prev => ({ ...prev, nome: e.target.value }))}
-                className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.nome ? 'border-red-300' : 'border-gray-300'}`}
-                placeholder="Nome della task collegata..."
-                autoFocus
-              />
-              {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
-            </div>
-
-            {/* Descrizione */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Descrizione</label>
-              <textarea
-                value={linkedTaskData.descrizione}
-                onChange={(e) => setLinkedTaskData(prev => ({ ...prev, descrizione: e.target.value }))}
-                rows={3}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                placeholder="Descrizione della task collegata..."
-              />
-            </div>
-
-            {/* Utente Assegnato */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Utente Assegnato *</label>
-              {loadingUsers ? (
-                <div className="flex items-center px-3 py-2 border border-gray-300 rounded-lg">
-                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
-                  <span className="text-gray-500">Caricamento utenti...</span>
-                </div>
-              ) : (
-                <select
-                  value={linkedTaskData.utente_assegnato}
-                  onChange={(e) => setLinkedTaskData(prev => ({ ...prev, utente_assegnato: e.target.value }))}
-                  className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.utente_assegnato ? 'border-red-300' : 'border-gray-300'}`}
-                >
-                  <option value="">Seleziona utente...</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.nome}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {errors.utente_assegnato && <p className="text-sm text-red-600 mt-1">{errors.utente_assegnato}</p>}
-            </div>
-
-            {/* Grid: Ore e Priorità */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ore Stimate *</label>
-                
-                {/* Toggle modalità */}
-                <div className="flex items-center gap-3 mb-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="hours"
-                      checked={linkedTaskData.stimate_mode === 'hours'}
-                      onChange={(e) => setLinkedTaskData(prev => ({ 
-                        ...prev, 
-                        stimate_mode: e.target.value,
-                        ore_stimate: ''
-                      }))}
-                      className="mr-1"
-                    />
-                    <span className="text-xs">Ore</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="minutes"
-                      checked={linkedTaskData.stimate_mode === 'minutes'}
-                      onChange={(e) => setLinkedTaskData(prev => ({ 
-                        ...prev, 
-                        stimate_mode: e.target.value,
-                        ore_stimate: ''
-                      }))}
-                      className="mr-1"
-                    />
-                    <span className="text-xs">Min</span>
-                  </label>
-                </div>
-
-                {linkedTaskData.stimate_mode === 'hours' ? (
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={linkedTaskData.ore_stimate}
-                    onChange={(e) => setLinkedTaskData(prev => ({ ...prev, ore_stimate: e.target.value }))}
-                    className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
-                    placeholder="es: 2.5"
-                  />
-                ) : (
-                  <input
-                    type="number"
-                    min="1"
-                    value={linkedTaskData.ore_stimate}
-                    onChange={(e) => setLinkedTaskData(prev => ({ ...prev, ore_stimate: e.target.value }))}
-                    className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
-                    placeholder="es: 45"
-                  />
-                )}
-
-                {/* Conversione real-time */}
-                {linkedTaskData.ore_stimate && (
-                  <p className="text-xs text-blue-600 mt-1 font-medium">
-                    {linkedTaskData.stimate_mode === 'hours' 
-                      ? `≈ ${Math.round(parseFloat(linkedTaskData.ore_stimate || 0) * 60)}min`
-                      : `≈ ${(parseInt(linkedTaskData.ore_stimate || 0) / 60).toFixed(2)}h`
-                    }
-                  </p>
-                )}
-
-                {errors.ore_stimate && <p className="text-sm text-red-600 mt-1">{errors.ore_stimate}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Priorità</label>
-                <select
-                  value={linkedTaskData.priorita}
-                  onChange={(e) => setLinkedTaskData(prev => ({ ...prev, priorita: e.target.value }))}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="low">Bassa</option>
-                  <option value="medium">Media</option>
-                  <option value="high">Alta</option>
-                  <option value="urgent">Urgente</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Data e Ora Scadenza */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Data Scadenza *</label>
-                <input
-                  type="date"
-                  value={linkedTaskData.scadenza_data}
-                  onChange={(e) => setLinkedTaskData(prev => ({ ...prev, scadenza_data: e.target.value }))}
-                  className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.scadenza_data ? 'border-red-300' : 'border-gray-300'}`}
-                  min={new Date().toISOString().split('T')[0]}
-                />
-                {errors.scadenza_data && <p className="text-sm text-red-600 mt-1">{errors.scadenza_data}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ora Scadenza *</label>
-                <input
-                  type="time"
-                  value={linkedTaskData.scadenza_ora}
-                  onChange={(e) => setLinkedTaskData(prev => ({ ...prev, scadenza_ora: e.target.value }))}
-                  className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.scadenza_ora ? 'border-red-300' : 'border-gray-300'}`}
-                />
-                {errors.scadenza_ora && <p className="text-sm text-red-600 mt-1">{errors.scadenza_ora}</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Pulsanti */}
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-              Annulla
-            </button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              Salva Configurazione
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 // CreateTaskModal Component - VERSIONE CON FALLBACK E CREAZIONE DINAMICA
 const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
   const { user } = useAuth(); // Utente corrente
@@ -741,7 +464,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     scadenza_ora: '',
     attivita_id: '', // Campo per l'attività selezionata
     priorita: 'medium',
-    task_collegata_config: null,  // ← CAMBIA QUESTA RIGA
     // FALLBACK: Campi per creazione al volo se non ci sono attività
     progetto_nome: 'Sistema Management',
     cliente_nome: 'Acme Corporation'
@@ -752,8 +474,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
   const [availableActivities, setAvailableActivities] = useState([]); // Attività disponibili
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [showCreateOnTheFly, setShowCreateOnTheFly] = useState(false); // Modal per creazione al volo
-  const [showLinkedTaskModal, setShowLinkedTaskModal] = useState(false);
-  const [users, setUsers] = useState([]);
 
   // Carica attività disponibili quando si apre il modal
   useEffect(() => {
@@ -780,37 +500,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
       setLoadingActivities(false);
     }
   };
-
-  // Carica utenti per task collegata
-  const loadUsers = async () => {
-    try {
-      // Per ora simuliamo, poi implementeremo l'API reale
-      setUsers([
-        { id: '1', nome: 'Mario Rossi' },
-        { id: '2', nome: 'Anna Verdi' },
-        { id: '3', nome: 'Test Manager' }
-      ]);
-    } catch (error) {
-      console.error('Errore caricamento utenti:', error);
-    }
-  };
-
-  // Gestione salvataggio configurazione task collegata
-  const handleSaveLinkedTask = (linkedTaskConfig) => {
-    setFormData(prev => ({
-      ...prev,
-      task_collegata_config: linkedTaskConfig
-    }));
-    setShowLinkedTaskModal(false);
-  };
-
-  // Carica utenti quando si apre il modal principale
-  useEffect(() => {
-    if (isOpen) {
-      loadAvailableActivities();
-      loadUsers(); // Aggiungi questa chiamata
-    }
-  }, [isOpen]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -888,9 +577,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           create_on_the_fly: true,
           cliente_nome: formData.cliente_nome,
           progetto_nome: formData.progetto_nome,
-          attivita_nome: `Attività per ${formData.nome}`, // Genera nome attività
-          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
-          task_collegata_config: formData.task_collegata_config
+          attivita_nome: `Attività per ${formData.nome}` // Genera nome attività
         };
       } else {
         // MODALITÀ NORMALE: Usa attività esistente
@@ -901,8 +588,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
           attivita_id: formData.attivita_id,
           utente_assegnato: user.id,
-          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
-          task_collegata_config: formData.task_collegata_config
         };
       }
       
@@ -919,7 +604,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
         scadenza_ora: '',
         attivita_id: '',
         priorita: 'medium',
-        task_collegata_config: null,  // ← CAMBIATO
         progetto_nome: 'Sistema Management',
         cliente_nome: 'Acme Corporation'
       });
@@ -973,56 +657,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                 className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 placeholder="Descrizione dettagliata della task..."
               />
-            </div>
-
-            {/* Task Collegata - Configurazione Avanzata */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Task Collegata (Opzionale)
-              </label>
-              
-              {formData.task_collegata_config ? (
-                // Mostra riepilogo task collegata configurata
-                <div className="border border-green-200 bg-green-50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-green-800">Task Collegata Configurata</h4>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, task_collegata_config: null }))}
-                      className="text-green-600 hover:text-green-800"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-sm text-green-700">
-                    <p><strong>Nome:</strong> {formData.task_collegata_config.nome}</p>
-                    <p><strong>Assegnata a:</strong> {users.find(u => u.id === formData.task_collegata_config.utente_assegnato)?.nome || 'N/A'}</p>
-                    <p><strong>Ore stimate:</strong> {formatMinutesToHours(formData.task_collegata_config.ore_stimate)}</p>
-                    <p><strong>Scadenza:</strong> {formData.task_collegata_config.scadenza_data} {formData.task_collegata_config.scadenza_ora}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLinkedTaskModal(true)}
-                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    Modifica configurazione
-                  </button>
-                </div>
-              ) : (
-                // Pulsante per configurare task collegata
-                <button
-                  type="button"
-                  onClick={() => setShowLinkedTaskModal(true)}
-                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors text-sm flex items-center justify-center"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Configura Task Collegata
-                </button>
-              )}
-              
-              <p className="text-xs text-gray-500 mt-1">
-                La task collegata verrà creata automaticamente quando completi questa task
-              </p>
             </div>
 
             {/* SEZIONE ATTIVITÀ O CREAZIONE AL VOLO */}
@@ -1283,15 +917,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
             </button>
           </div>
         </form>
-
-      {/* Modal Task Collegata */}
-        <ConfigureLinkedTaskModal
-          isOpen={showLinkedTaskModal}
-          onClose={() => setShowLinkedTaskModal(false)}
-          onSave={handleSaveLinkedTask}
-          parentTask={formData}
-        />
-
       </div>
     </div>
   );

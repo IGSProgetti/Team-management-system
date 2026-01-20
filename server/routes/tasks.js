@@ -110,7 +110,7 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
 // POST /api/tasks - Crea nuova task ✨ CON AUTO-ASSEGNAZIONE PROGETTO
 router.post('/', authenticateToken, requireResource, validateTask, async (req, res) => {
   try {
-    const { nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id } = req.body;
+    const { nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, task_collegata_config } = req.body;
 
     await transaction(async (client) => {
       // Verifica permessi sull'attività
@@ -192,11 +192,14 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
       }
 
       // 4. Crea la task (ora l'utente è sicuramente assegnato al progetto)
+      // Se c'è una configurazione task collegata, salvala come JSON
+      const taskCollegataConfigJSON = task_collegata_config ? JSON.stringify(task_collegata_config) : null;
+
       const taskResult = await client.query(`
-        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, creata_da)
+        INSERT INTO task (nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_config, creata_da)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
-      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_id, req.user.id]);
+      `, [nome, descrizione, attivita_id, utente_assegnato, ore_stimate, scadenza, task_collegata_config ? JSON.stringify(task_collegata_config) : null, req.user.id]);
 
       const task = taskResult.rows[0];
 
@@ -401,11 +404,102 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
         (SELECT nome FROM utenti WHERE id = task.utente_assegnato) as utente_nome
       `, params);
 
+
       if (result.rows.length === 0) {
         throw new Error('Task not found, already completed, or access denied');
       }
 
       const task = result.rows[0];
+
+      // 🚀 AUTO-CREAZIONE TASK COLLEGATA CON CONFIGURAZIONE COMPLETA
+      if (task.task_collegata_config) {
+        console.log('🔗 Trovata configurazione task collegata, avvio creazione automatica...');
+        
+        try {
+          // Parsifica la configurazione JSON
+          const linkedConfig = task.task_collegata_config; // Già un oggetto JavaScript!
+          console.log('📋 Configurazione task collegata:', linkedConfig);
+          
+          // Ottieni i dettagli della task madre per ereditare attività/progetto
+          const taskDetailsResult = await client.query(`
+            SELECT 
+              t.attivita_id,
+              a.progetto_id,
+              p.nome as progetto_nome,
+              a.nome as attivita_nome
+            FROM task t
+            JOIN attivita a ON t.attivita_id = a.id  
+            JOIN progetti p ON a.progetto_id = p.id
+            WHERE t.id = $1
+          `, [id]);
+
+          if (taskDetailsResult.rows.length > 0) {
+            const parentTaskDetails = taskDetailsResult.rows[0];
+            
+            // Verifica che l'utente assegnato esista
+            const userCheck = await client.query(`
+              SELECT id, nome FROM utenti WHERE id = $1 AND attivo = true
+            `, [linkedConfig.utente_assegnato]);
+
+            if (userCheck.rows.length === 0) {
+              console.log('❌ Utente assegnato non trovato, assegno alla stessa persona della task madre');
+              linkedConfig.utente_assegnato = task.utente_assegnato;
+            }
+
+            // Crea la task collegata con la configurazione completa
+            const linkedTaskResult = await client.query(`
+              INSERT INTO task (
+                nome, 
+                descrizione, 
+                attivita_id, 
+                utente_assegnato, 
+                ore_stimate, 
+                scadenza, 
+                task_madre_id,
+                stato,
+                priorita,
+                creata_da
+              ) 
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              RETURNING *
+            `, [
+              linkedConfig.nome,
+              linkedConfig.descrizione,
+              parentTaskDetails.attivita_id,  // Stessa attività della task madre
+              linkedConfig.utente_assegnato,
+              linkedConfig.ore_stimate,
+              linkedConfig.scadenza,
+              id,  // ID della task madre
+              'programmata',
+              linkedConfig.priorita || 'medium',
+              req.user.id
+            ]);
+
+            const linkedTask = linkedTaskResult.rows[0];
+            console.log('✅ Task collegata creata con successo!');
+            console.log(`📋 Nome: ${linkedTask.nome}`);
+            console.log(`👤 Assegnata a: ${userCheck.rows[0]?.nome || 'Stesso utente'}`);
+            console.log(`⏱️  Ore stimate: ${linkedTask.ore_stimate} minuti`);
+            console.log(`📅 Scadenza: ${linkedTask.scadenza}`);
+            console.log(`🎯 Priorità: ${linkedTask.priorita}`);
+            
+            // Aggiorna il riferimento nella task originale per collegamento bidirezionale
+            await client.query(`
+              UPDATE task 
+              SET task_collegata_id = $1 
+              WHERE id = $2
+            `, [linkedTask.id, id]);
+            
+            console.log('🔄 Collegamento bidirezionale aggiornato');
+          }
+        } catch (configError) {
+          console.error('❌ Errore nel parsing configurazione task collegata:', configError);
+          console.log('ℹ️  La task è stata completata ma la task collegata non è stata creata');
+        }
+      } else {
+        console.log('ℹ️  Nessuna configurazione task collegata trovata per questa task');
+      }
+
 
       res.json({
         message: 'Task completed successfully',
