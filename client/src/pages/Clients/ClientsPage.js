@@ -12,6 +12,7 @@ import {
   Filter
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
+import api from '../../utils/api';
 
 // Utils
 const formatCurrency = (amount) => {
@@ -220,22 +221,10 @@ const CreateClientModal = ({ isOpen, onClose, onSubmit }) => {
         budget: formData.budget ? parseFloat(formData.budget) : null
       };
 
-      // Chiamata API reale
-      const response = await fetch('/api/clients', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(clientData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || 'Errore durante la creazione');
-      }
-
-      const result = await response.json();
+      // Chiamata API
+      const response = await api.post('/clients', clientData);
+      const result = response.data;
+      
       console.log('Cliente creato:', result);
       
       // Notifica successo
@@ -244,7 +233,7 @@ const CreateClientModal = ({ isOpen, onClose, onSubmit }) => {
         ? 'Cliente creato e approvato automaticamente!'
         : 'Cliente creato! In attesa di approvazione dal manager.';
       
-      alert(message); // Sostituire con toast
+      alert(message);
       
       // Chiudi modal e callback
       onClose();
@@ -252,7 +241,7 @@ const CreateClientModal = ({ isOpen, onClose, onSubmit }) => {
       
     } catch (error) {
       console.error('Errore creazione cliente:', error);
-      setErrors({ submit: 'Errore durante la creazione del cliente' });
+      setErrors({ submit: error.response?.data?.details || 'Errore durante la creazione del cliente' });
     } finally {
       setIsSubmitting(false);
     }
@@ -395,28 +384,16 @@ const ClientsPage = () => {
     stato: 'all'
   });
 
-  // Mock data per ora - sostituire con fetch reale
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch clienti da API reali
+  // Fetch clienti da API
   React.useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await fetch('/api/clients', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Clienti caricati dal database:', data.clients);
-          setClients(data.clients || []);
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        const response = await api.get('/clients');
+        console.log('Clienti caricati dal database:', response.data);
+        setClients(response.data.clients || []);
       } catch (error) {
         console.error('Errore fetch clienti:', error);
         console.log('Fallback ai dati demo...');
@@ -628,10 +605,8 @@ const ClientsPage = () => {
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSubmit={(newClient) => {
-            // Ricarica la lista clienti dopo la creazione
             console.log('Cliente creato:', newClient);
-            // TODO: Aggiornare la lista clienti
-            window.location.reload(); // Soluzione temporanea
+            window.location.reload();
           }}
         />
       )}
