@@ -233,16 +233,6 @@ function App() {
                       </ManagerRoute>
                     }
                   />
-
-                  {/* AGGIUNGI QUESTA ROUTE QUI */}
-<Route
-  path="riassegnazioni"
-  element={
-    <ManagerRoute>
-      <RiassegnazioniStorico />
-    </ManagerRoute>
-  }
-/>
                 </Route>
 
                 {/* Catch all - redirect to dashboard */}

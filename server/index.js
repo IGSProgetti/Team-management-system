@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const riassegnazioniRoutes = require('./routes/riassegnazioni');
 require('dotenv').config();
 
 const { pool } = require('./config/database');
@@ -45,6 +46,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/riassegnazioni', riassegnazioniRoutes);
 app.use('/api/calendar', calendarRoutes);
 
 const budgetControlRoutes = require('./routes/budget-control');

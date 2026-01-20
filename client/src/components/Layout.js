@@ -10,7 +10,8 @@ import {
   User,
   LogOut,
   Menu,
-  DollarSign  // <-- Aggiungi questa riga
+  DollarSign,
+  ArrowRightLeft
 } from 'lucide-react';
 import { useAuthStore } from '../store';
 
@@ -20,24 +21,25 @@ const Layout = () => {
   const { user, logout } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
-  const navigationItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Task', href: '/tasks', icon: CheckSquare },
-  { name: 'Attività', href: '/activities', icon: Layers },
-  { name: 'Progetti', href: '/projects', icon: FolderOpen },
-  { name: 'Clienti', href: '/clients', icon: Users },
-  { name: 'Calendario', href: '/calendar', icon: Calendar },
-];
+  // Navigation items base per tutti gli utenti
+  const baseNavigationItems = [
+    { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Task', href: '/tasks', icon: CheckSquare },
+    { name: 'Attività', href: '/activities', icon: Layers },
+    { name: 'Progetti', href: '/projects', icon: FolderOpen },
+    { name: 'Clienti', href: '/clients', icon: Users },
+    { name: 'Calendario', href: '/calendar', icon: Calendar },
+  ];
 
-if (user?.ruolo === 'manager') {
-  navigationItems.splice(-1, 0, {
-    name: 'Utenti', href: '/users', icon: User
-  });
-  // Aggiungi questa riga per Budget Control
-  navigationItems.splice(-1, 0, {
-    name: 'Budget Control', href: '/budget-control', icon: DollarSign
-  });
-}
+  // Aggiungi items manager se l'utente è manager
+  const navigationItems = user?.ruolo === 'manager' 
+    ? [
+        ...baseNavigationItems,
+        { name: 'Utenti', href: '/users', icon: User },
+        { name: 'Budget Control', href: '/budget-control', icon: DollarSign },
+        { name: 'Riassegnazioni', href: '/riassegnazioni', icon: ArrowRightLeft },
+      ]
+    : baseNavigationItems;
 
   const currentPage = navigationItems.find(item => location.pathname.startsWith(item.href));
 
@@ -87,6 +89,12 @@ if (user?.ruolo === 'manager') {
                   >
                     <Icon className="mr-3 w-5 h-5" />
                     {item.name}
+                    {/* Badge NEW per Riassegnazioni */}
+                    {item.name === 'Riassegnazioni' && (
+                      <span className="ml-auto px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full font-medium">
+                        NEW
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -145,6 +153,12 @@ if (user?.ruolo === 'manager') {
                     >
                       <Icon className="mr-4 w-6 h-6" />
                       {item.name}
+                      {/* Badge NEW per Riassegnazioni nel mobile menu */}
+                      {item.name === 'Riassegnazioni' && (
+                        <span className="ml-auto px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full font-medium">
+                          NEW
+                        </span>
+                      )}
                     </button>
                   );
                 })}

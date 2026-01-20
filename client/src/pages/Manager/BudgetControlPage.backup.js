@@ -16,14 +16,11 @@ import {
   Activity,
   Zap,
   BarChart3,
-  Calendar,
-  ArrowRightLeft, // Nuovo icona per riassegnazione
-  Plus
+  Calendar
 } from 'lucide-react';
 
-// Import modals
+// Import the modal component
 import TaskDetailsModal from './TaskDetailsModal';
-import RiassegnazioneWizard from '../../components/Manager/RiassegnazioneWizard'; // Path corretto
 
 const BudgetControlPage = () => {
   const [data, setData] = useState(null);
@@ -31,7 +28,6 @@ const BudgetControlPage = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedResource, setSelectedResource] = useState(null);
   const [showTaskDetails, setShowTaskDetails] = useState(false);
-  const [showRiassegnazioneWizard, setShowRiassegnazioneWizard] = useState(false); // Nuovo stato
 
   // Fetch data from API
   const fetchBudgetData = async () => {
@@ -146,20 +142,6 @@ const BudgetControlPage = () => {
     setShowTaskDetails(true);
   };
 
-  // Handle riassegnazione click
-  const handleRiassegnazione = (resource = null) => {
-    setSelectedResource(resource);
-    setShowRiassegnazioneWizard(true);
-  };
-
-  // Handle wizard close with refresh
-  const handleWizardClose = () => {
-    setShowRiassegnazioneWizard(false);
-    setSelectedResource(null);
-    // Refresh data dopo riassegnazione
-    fetchBudgetData();
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -192,17 +174,6 @@ const BudgetControlPage = () => {
             <option value="quarter">Trimestre</option>
             <option value="year">Anno</option>
           </select>
-
-          {/* Nuovo pulsante Riassegnazione Ore */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleRiassegnazione()}
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center gap-2 font-medium"
-          >
-            <ArrowRightLeft size={18} />
-            Riassegna Ore
-          </motion.button>
 
           <button
             onClick={fetchBudgetData}
@@ -276,23 +247,10 @@ const BudgetControlPage = () => {
       {/* Capacity Overview */}
       {data?.capacity_stats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
-              <BarChart3 className="w-6 h-6 text-purple-600" />
-              Panoramica Capacità Team - {getPeriodLabel(selectedPeriod)}
-            </h2>
-            
-            {/* Pulsante Riassegnazione Ore nella sezione capacità */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleRiassegnazione()}
-              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center gap-2 text-sm font-medium"
-            >
-              <ArrowRightLeft size={16} />
-              Gestisci Riassegnazioni
-            </motion.button>
-          </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-3">
+            <BarChart3 className="w-6 h-6 text-purple-600" />
+            Panoramica Capacità Team - {getPeriodLabel(selectedPeriod)}
+          </h2>
 
           <div className="grid md:grid-cols-3 gap-6 mb-6">
             <div className="text-center">
@@ -364,9 +322,6 @@ const BudgetControlPage = () => {
             const TaskStatusIcon = taskStatus.icon;
             const CapacityStatusIcon = capacityStatus.icon;
             
-            // Determina se la risorsa ha ore riassegnabili (bilancio positivo)
-            const hasRiassegnabili = resource.bilancio_ore < 0; // ore disponibili
-            
             return (
               <motion.div
                 key={resource.risorsa_id}
@@ -396,14 +351,6 @@ const BudgetControlPage = () => {
                             <CapacityStatusIcon size={12} />
                             {capacityStatus.label}
                           </div>
-                          
-                          {/* Badge riassegnabili */}
-                          {hasRiassegnabili && (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-600">
-                              <ArrowRightLeft size={12} />
-                              Riassegnabili
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -517,22 +464,9 @@ const BudgetControlPage = () => {
                       Dettagli
                     </motion.button>
 
-                    {/* Pulsante riassegnazione dedicato per risorsa */}
-                    {hasRiassegnabili && (
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handleRiassegnazione(resource)}
-                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm flex items-center gap-2"
-                      >
-                        <ArrowRightLeft size={16} />
-                        Riassegna
-                      </motion.button>
-                    )}
-
                     {resource.capacita_disponibile_ore > 0 && (
-                      <button className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm flex items-center gap-2">
-                        <Plus size={16} />
+                      <button className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm flex items-center gap-2">
+                        <RefreshCw size={16} />
                         Assegna Ore
                       </button>
                     )}
@@ -620,13 +554,6 @@ const BudgetControlPage = () => {
         isOpen={showTaskDetails}
         onClose={() => setShowTaskDetails(false)}
         selectedPeriod={selectedPeriod}
-      />
-
-      {/* Riassegnazione Wizard Modal */}
-      <RiassegnazioneWizard
-        isOpen={showRiassegnazioneWizard}
-        onClose={handleWizardClose}
-        initialResource={selectedResource}
       />
     </div>
   );
