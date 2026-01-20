@@ -85,38 +85,6 @@ router.get('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/users/list - Lista semplice utenti per dropdown (accessibile a tutti)
-router.get('/list', authenticateToken, async (req, res) => {
-  try {
-    console.log('📋 Caricamento lista utenti per dropdown - Utente:', req.user?.email);
-
-    const result = await query(`
-      SELECT 
-        id, 
-        nome, 
-        email, 
-        ruolo
-      FROM utenti 
-      WHERE attivo = true
-      ORDER BY nome ASC
-    `);
-
-    console.log(`✅ Trovati ${result.rows.length} utenti attivi per dropdown`);
-
-    res.json({
-      users: result.rows,
-      total: result.rows.length
-    });
-
-  } catch (error) {
-    console.error('❌ Errore nel caricamento lista utenti:', error);
-    res.status(500).json({ 
-      error: 'Server Error', 
-      details: 'Failed to fetch users list' 
-    });
-  }
-});
-
 // GET /api/users/:id - Dettagli utente specifico (solo manager)
 router.get('/:id', authenticateToken, requireManager, validateUUID('id'), async (req, res) => {
   try {
@@ -417,6 +385,5 @@ router.get('/:id/hours', authenticateToken, validateUUID('id'), async (req, res)
     });
   }
 });
-
 
 module.exports = router;

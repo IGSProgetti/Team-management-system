@@ -478,19 +478,22 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
 
   const loadUsers = async () => {
     try {
-      // Utenti reali dal database con UUID corretti
-      const realUsers = [
-        { id: '3b80691f-07ee-47ed-ad93-729aace6b52f', nome: 'Mario Rossi' },
-        { id: 'a70a2261-a145-4239-bd38-157139f9e02a', nome: 'Test Manager' },
-        { id: '1d237e1b-58c0-4e42-bcf3-36799a64c074', nome: 'Manager Sistema' },
-        { id: '0b99be51-7468-4217-8c96-70820ee30459', nome: 'Risorsa manuale' },
-        { id: '2d0e0a02-38c3-457e-94b9-fbd6076e7eb6', nome: 'Utente prova oggi' },
-        { id: '88e88c2b-f1ec-4a97-9143-2033e7476626', nome: 'Test Manager' },
-        { id: 'ad75bff2-30f5-4f0f-9803-b805b450e132', nome: 'Test User Nuovo' }
-      ];
+      // Carica utenti reali dal nuovo endpoint /list
+      const response = await fetch('/api/users/list', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      console.log('👥 Utenti caricati dal database:', realUsers);
-      setUsers(realUsers);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('👥 Utenti caricati dinamicamente:', data.users);
+        setUsers(data.users || []);
+      } else {
+        console.error('Errore nel caricamento utenti - Status:', response.status);
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Errore caricamento utenti:', error);
       setUsers([]);
