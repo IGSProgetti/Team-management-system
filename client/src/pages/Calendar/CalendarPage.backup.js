@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, Grid } from 'lucide-react';
 import { useCalendarStore } from '../../store';
 import CalendarMonth from './CalendarMonth';
-import CalendarList from './CalendarList';
-import CalendarFilters from './CalendarFilters';
 
 // Utility per formattare date
 const formatMonth = (date) => {
@@ -320,52 +318,6 @@ const CalendarPage = () => {
   const [selectedDayEvents, setSelectedDayEvents] = useState(null);
   const [showDayModal, setShowDayModal] = useState(false);
 
-  // Filtri
-  const [filters, setFilters] = useState({
-    cliente: '',
-    progetto: '',
-    attivita: '',
-    tipo: 'all',
-    stato: 'all',
-    risorsa: ''
-  });
-
-  // Applica filtri agli eventi
-  const getFilteredEvents = () => {
-    let filtered = events;
-
-    if (filters.cliente) {
-      filtered = filtered.filter(e => e.cliente_nome === filters.cliente);
-    }
-
-    if (filters.progetto) {
-      filtered = filtered.filter(e => e.progetto_nome === filters.progetto);
-    }
-
-    if (filters.attivita) {
-      filtered = filtered.filter(e => e.attivita_nome === filters.attivita);
-    }
-
-    if (filters.risorsa) {
-      filtered = filtered.filter(e => e.utente_nome === filters.risorsa);
-    }
-
-    if (filters.tipo !== 'all') {
-      filtered = filtered.filter(e => e.tipo === filters.tipo);
-    }
-
-    if (filters.stato !== 'all') {
-      filtered = filtered.filter(e => e.stato === filters.stato);
-    }
-
-    return filtered;
-  };
-
-  const filteredEvents = getFilteredEvents();
-
-  // Carica eventi quando cambia il mese
-
-
   // Carica eventi quando cambia il mese
   useEffect(() => {
     loadEvents();
@@ -441,20 +393,6 @@ const CalendarPage = () => {
     setSelectedDayEvents(null);
   };
 
-  const handleFiltersChange = (newFilters) => {
-    setFilters(newFilters);
-  };
-
-  const handleEventClick = (event) => {
-    // Apri modal con dettaglio evento singolo
-    setSelectedDate(new Date(event.scadenza));
-    setSelectedDayEvents({
-      task: event.tipo === 'task' ? [event] : [],
-      attivita: event.tipo === 'attivita' ? [event] : []
-    });
-    setShowDayModal(true);
-  };
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -466,15 +404,6 @@ const CalendarPage = () => {
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
       />
-
-      {/* Filtri */}
-      <div className="mb-6">
-        <CalendarFilters
-          events={events}
-          onFiltersChange={handleFiltersChange}
-          currentFilters={filters}
-        />
-      </div>
 
       {/* Vista Calendario */}
       {loading && (
@@ -498,14 +427,17 @@ const CalendarPage = () => {
           {viewMode === 'month' ? (
             <CalendarMonth
               currentDate={currentDate}
-              events={filteredEvents}
+              events={events}
               onDayClick={handleDayClick}
             />
           ) : (
-            <CalendarList
-              events={filteredEvents}
-              onEventClick={handleEventClick}
-            />
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="text-center text-gray-500">
+                <List className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <p className="text-lg font-medium">Vista Lista</p>
+                <p className="text-sm mt-1">In sviluppo - {events.length} eventi caricati</p>
+              </div>
+            </div>
           )}
         </>
       )}
