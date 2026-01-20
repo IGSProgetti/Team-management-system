@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../utils/api';
 import { Plus, Search, Filter, Clock, User, Calendar, X } from 'lucide-react';
 import { useTasks, useAuth } from '../../hooks';
 import { activitiesAPI } from '../../utils/api';

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -38,8 +37,11 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
   // Fetch crediti disponibili
   const fetchCrediti = async () => {
     try {
-      const response = await api.get('/riassegnazioni/crediti-disponibili');
-      setCrediti(response.data.crediti || []);
+      const response = await fetch('/api/riassegnazioni/crediti-disponibili', {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      setCrediti(data.crediti || []);
     } catch (error) {
       console.error('Error fetching crediti:', error);
     }
@@ -48,11 +50,19 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
   // Fetch debiti compensabili
   const fetchDebiti = async () => {
     try {
-      const response = await api.get('/riassegnazioni/debiti');
-      setDebiti(response.data.debiti || []);
+      const response = await fetch('/api/riassegnazioni/debiti', {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      setDebiti(data.debiti || []);
     } catch (error) {
       console.error('Error fetching debiti:', error);
     }
+  };
+
+  const getToken = () => {
+    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+    return authData.state?.token;
   };
 
   useEffect(() => {
@@ -108,16 +118,24 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
         payload.nome_nuova_task = nuovaTaskNome;
       }
 
-      const response = await api.post('/riassegnazioni/create', payload);
+      const response = await fetch('/api/riassegnazioni/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-      if (response.data) {
+      if (response.ok) {
         handleClose();
         // TODO: Show success toast
         // TODO: Refresh parent data
+      } else {
+        // TODO: Handle error
       }
     } catch (error) {
       console.error('Error creating riassegnazione:', error);
-      // TODO: Handle error
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../utils/api';
 import { X, Building2, DollarSign, Calendar, FileText, AlertCircle } from 'lucide-react';
 
 const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
