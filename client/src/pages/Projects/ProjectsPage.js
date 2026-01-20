@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import CreateProjectModal from './CreateProjectModal';
 import ProjectDetailsModal from './ProjectDetailsModal';
+import api from '../../utils/api';
 
 // Utility functions
 const formatCurrency = (amount) => {
@@ -361,41 +362,22 @@ const ProjectsPage = () => {
 
   // Fetch dati dashboard
   const fetchDashboard = async () => {
-    try {
-      setLoading(true);
-      
-      // Ottieni il token dall'auth storage
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
+  try {
+    setLoading(true);
+    
+    const response = await api.get('/projects/dashboard');
+    
+    setProjects(response.data.projects || []);
+    setOverview(response.data.overview || {});
+    setError(null);
 
-      if (!token) {
-        throw new Error('Token non trovato - effettua il login');
-      }
-
-      const response = await fetch('/api/projects/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Errore API: ${response.status} - ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      setProjects(data.projects || []);
-      setOverview(data.overview || {});
-      setError(null);
-
-    } catch (err) {
-      console.error('Errore fetch dashboard:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error('Errore fetch dashboard:', err);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchDashboard();
