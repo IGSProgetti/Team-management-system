@@ -314,6 +314,7 @@ const CalendarPage = () => {
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [dailyCapacity, setDailyCapacity] = useState(null);
   
   // Modal dettaglio giorno
   const [selectedDate, setSelectedDate] = useState(null);
@@ -327,7 +328,8 @@ const CalendarPage = () => {
     attivita: '',
     tipo: 'all',
     stato: 'all',
-    risorsa: ''
+    risorsa: '',
+    solo_mie: false  // ← NUOVO
   });
 
   // Applica filtri agli eventi
@@ -356,6 +358,22 @@ const CalendarPage = () => {
 
     if (filters.stato !== 'all') {
       filtered = filtered.filter(e => e.stato === filters.stato);
+    }
+
+    // Filtro "Solo mie attività" (task assegnate all'utente loggato)
+    if (filters.solo_mie) {
+      // Ottieni l'utente dal localStorage o dalla prop
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      if (currentUser.id) {
+        filtered = filtered.filter(e => {
+          // Per le task, filtra per utente_id
+          if (e.tipo === 'task') {
+            return e.utente_id === currentUser.id;
+          }
+          // Per le attività, mantieni tutte (o filtra se vuoi)
+          return true;
+        });
+      }
     }
 
     return filtered;
@@ -400,6 +418,7 @@ const CalendarPage = () => {
       const data = await response.json();
       setEvents(data.events || []);
       setStatistics(data.statistics || {});
+      setDailyCapacity(data.daily_capacity || null);
 
     } catch (err) {
       console.error('Errore caricamento calendario:', err);
@@ -499,6 +518,7 @@ const CalendarPage = () => {
             <CalendarMonth
               currentDate={currentDate}
               events={filteredEvents}
+              dailyCapacity={dailyCapacity}
               onDayClick={handleDayClick}
             />
           ) : (

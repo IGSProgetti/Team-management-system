@@ -99,8 +99,7 @@ const groupEventsByDay = (events) => {
   return grouped;
 };
 
-// DayCell Component - Singola cella giorno
-const DayCell = ({ day, events, onDayClick }) => {
+const DayCell = ({ day, events, dailyCapacity, onDayClick }) => {
   const dateKey = formatDateKey(day.date);
   const dayEvents = events[dateKey] || { task: [], attivita: [], overdue: 0, urgent: 0, completed: 0 };
   const totalEvents = dayEvents.task.length + dayEvents.attivita.length;
@@ -108,9 +107,13 @@ const DayCell = ({ day, events, onDayClick }) => {
   
   const isCurrentDay = isToday(day.date);
   
+  // Capacità giornaliera
+  const capacity = dailyCapacity?.[dateKey];
+  const hasCapacity = capacity && capacity.ore_totali_disponibili > 0;
+  
   // Classi CSS dinamiche
   const cellClasses = [
-    'relative min-h-24 p-2 border border-gray-200 transition-all duration-200',
+    'relative min-h-32 p-2 border border-gray-200 transition-all duration-200',
     day.isCurrentMonth ? 'bg-white hover:bg-gray-50' : 'bg-gray-50',
     hasEvents ? 'cursor-pointer' : '',
     isCurrentDay ? 'ring-2 ring-blue-500 ring-inset' : ''
@@ -121,6 +124,16 @@ const DayCell = ({ day, events, onDayClick }) => {
     day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400',
     isCurrentDay ? 'text-blue-600 font-bold' : ''
   ].join(' ');
+  
+  // Colore barra capacità
+  const getCapacityColor = () => {
+    if (!capacity) return 'bg-gray-200';
+    const perc = capacity.percentuale_utilizzo;
+    if (perc >= 100) return 'bg-red-500';
+    if (perc >= 80) return 'bg-orange-500';
+    if (perc >= 50) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
   
   return (
     <div 
@@ -134,7 +147,7 @@ const DayCell = ({ day, events, onDayClick }) => {
       
       {/* Indicatori eventi */}
       {hasEvents && (
-        <div className="space-y-1">
+        <div className="space-y-1 mb-2">
           {/* Badge priorità */}
           {dayEvents.overdue > 0 && (
             <div className="flex items-center gap-1 text-xs">
@@ -168,8 +181,8 @@ const DayCell = ({ day, events, onDayClick }) => {
           </div>
           
           {/* Mini preview primi eventi (max 2) */}
-          <div className="space-y-0.5 mt-1">
-            {[...dayEvents.task, ...dayEvents.attivita].slice(0, 2).map((event, idx) => (
+          <div className="space-y-0.5">
+            {[...dayEvents.task, ...dayEvents.attivita].slice(0, 1).map((event, idx) => (
               <div
                 key={`${event.id}-${idx}`}
                 className="text-xs px-1 py-0.5 rounded truncate"
@@ -183,11 +196,38 @@ const DayCell = ({ day, events, onDayClick }) => {
               </div>
             ))}
             
-            {totalEvents > 2 && (
+            {totalEvents > 1 && (
               <div className="text-xs text-gray-500 px-1">
-                +{totalEvents - 2} altri
+                +{totalEvents - 1}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* Indicatore Capacità Giornaliera */}
+      {hasCapacity && day.isCurrentMonth && (
+        <div className="mt-auto pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-gray-600 font-medium">
+              {Math.round(capacity.ore_assegnate / 60 * 10) / 10}h / {capacity.ore_totali_disponibili / 60}h
+            </span>
+            <span className={`font-semibold ${
+              capacity.percentuale_utilizzo >= 100 ? 'text-red-600' :
+              capacity.percentuale_utilizzo >= 80 ? 'text-orange-600' :
+              capacity.percentuale_utilizzo >= 50 ? 'text-yellow-600' :
+              'text-green-600'
+            }`}>
+              {capacity.percentuale_utilizzo}%
+            </span>
+          </div>
+          
+          {/* Barra progresso */}
+          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all ${getCapacityColor()}`}
+              style={{ width: `${Math.min(capacity.percentuale_utilizzo, 100)}%` }}
+            />
           </div>
         </div>
       )}
@@ -196,7 +236,7 @@ const DayCell = ({ day, events, onDayClick }) => {
 };
 
 // CalendarMonth Component - Griglia principale
-const CalendarMonth = ({ currentDate, events, onDayClick }) => {
+const CalendarMonth = ({ currentDate, events, dailyCapacity, onDayClick }) => {
   const days = getMonthDays(currentDate);
   const groupedEvents = groupEventsByDay(events);
   
@@ -223,6 +263,7 @@ const CalendarMonth = ({ currentDate, events, onDayClick }) => {
             key={`${formatDateKey(day.date)}-${index}`}
             day={day}
             events={groupedEvents}
+            dailyCapacity={dailyCapacity}
             onDayClick={onDayClick}
           />
         ))}

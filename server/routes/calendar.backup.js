@@ -169,70 +169,6 @@ router.get('/events', authenticateToken, validateDateRange, async (req, res) => 
       in_corso: events.filter(e => e.stato === 'in_esecuzione').length
     };
 
-    // Calcola capacità giornaliera per utente specifico
-    let dailyCapacity = null;
-    
-    // Determina per quale utente calcolare la capacità
-    // - Risorsa: sempre la propria
-    // - Manager con filtro: la risorsa filtrata
-    // - Manager senza filtro: la propria (il manager stesso)
-    const targetUserId = req.user.ruolo === 'risorsa' 
-      ? req.user.id 
-      : (utente_id || req.user.id);  // ← Manager vede la propria se non filtra
-    
-    if (data_inizio && data_fine) {
-      
-      // Calcola ore per ogni giorno del periodo
-      const daysInPeriod = {};
-      
-      // Genera tutti i giorni nel range
-        const start = new Date(data_inizio);
-        const end = new Date(data_fine);
-        const totalCapacityPerDay = 8 * 60; // 8 ore al giorno in minuti
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateKey = d.toISOString().split('T')[0];
-          daysInPeriod[dateKey] = {
-            data: dateKey,
-            ore_totali_disponibili: totalCapacityPerDay,
-            ore_assegnate: 0,
-            ore_disponibili: totalCapacityPerDay,
-            percentuale_utilizzo: 0,
-            eventi_count: 0
-          };
-        }
-        
-        // Somma ore stimate per ogni giorno
-        events.forEach(event => {
-          if (event.tipo === 'task') {
-            const eventUserId = event.utente_id || event.utente_assegnato;
-            const shouldInclude = req.user.ruolo === 'risorsa' 
-              ? eventUserId === req.user.id 
-              : eventUserId === targetUserId;
-              
-            if (shouldInclude) {
-              const eventDate = new Date(event.scadenza).toISOString().split('T')[0];
-              if (daysInPeriod[eventDate]) {
-                daysInPeriod[eventDate].ore_assegnate += parseInt(event.ore_stimate || 0);
-                daysInPeriod[eventDate].eventi_count++;
-              }
-            }
-          }
-        });
-        
-        // Calcola disponibili e percentuali
-        Object.keys(daysInPeriod).forEach(dateKey => {
-          const day = daysInPeriod[dateKey];
-          day.ore_disponibili = day.ore_totali_disponibili - day.ore_assegnate;
-          day.percentuale_utilizzo = day.ore_totali_disponibili > 0 
-            ? Math.round((day.ore_assegnate / day.ore_totali_disponibili) * 100)
-            : 0;
-        });
-        
-        dailyCapacity = daysInPeriod;
-      
-    }
-
     res.json({
       events: events.map(event => ({
         ...event,
@@ -243,7 +179,6 @@ router.get('/events', authenticateToken, validateDateRange, async (req, res) => 
         task_completate: parseInt(event.task_completate || 0)
       })),
       statistics: stats,
-      daily_capacity: dailyCapacity,
       filtri: { data_inizio, data_fine, utente_id, tipo }
     });
 

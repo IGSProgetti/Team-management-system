@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, X, ChevronDown, Users, Briefcase, FolderOpen, Layers } from 'lucide-react';
+import { Filter, X, ChevronDown, Users, Briefcase, FolderOpen, Layers, User } from 'lucide-react';
 
 // CalendarFilters Component
 const CalendarFilters = ({ events, onFiltersChange, currentFilters }) => {
@@ -10,7 +10,8 @@ const CalendarFilters = ({ events, onFiltersChange, currentFilters }) => {
     attivita: '',
     tipo: 'all',
     stato: 'all',
-    risorsa: ''
+    risorsa: '',
+    solo_mie: false  // ← NUOVO
   });
 
   // Estrai dati unici per i filtri
@@ -69,7 +70,8 @@ const CalendarFilters = ({ events, onFiltersChange, currentFilters }) => {
       attivita: '',
       tipo: 'all',
       stato: 'all',
-      risorsa: ''
+      risorsa: '',
+       solo_mie: false  // ← NUOVO
     };
     setFilters(resetFilters);
     onFiltersChange(resetFilters);
@@ -143,6 +145,33 @@ const CalendarFilters = ({ events, onFiltersChange, currentFilters }) => {
       {showFilters && (
         <div className="p-4 space-y-4">
           {/* Grid Filtri Principali */}
+          
+         {/* Toggle Solo Mie Attività (solo per Manager) */}
+          <div className="col-span-full">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={filters.solo_mie}
+                  onChange={(e) => handleFilterChange('solo_mie', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </div>
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  Mostra solo le mie attività
+                </span>
+              </div>
+            </label>
+            <p className="text-xs text-gray-500 mt-1 ml-14">
+              {filters.solo_mie 
+                ? '✅ Stai visualizzando solo le task assegnate a te' 
+                : 'ℹ️ Stai visualizzando tutte le task del team'}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Filtro Cliente */}
             <div>
@@ -326,6 +355,16 @@ const CalendarFilters = ({ events, onFiltersChange, currentFilters }) => {
                   <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
                     Stato: {filters.stato}
                     <button onClick={() => handleFilterChange('stato', 'all')} className="hover:text-gray-900">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {filters.solo_mie && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                    <User className="w-3 h-3" />
+                    Solo mie attività
+                    <button onClick={() => handleFilterChange('solo_mie', false)} className="hover:text-blue-900">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
