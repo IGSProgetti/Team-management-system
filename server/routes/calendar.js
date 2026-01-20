@@ -10,34 +10,32 @@ router.get('/events', authenticateToken, validateDateRange, async (req, res) => 
   try {
     const { data_inizio, data_fine, utente_id, tipo } = req.query;
 
-    let whereClause = 'WHERE 1=1';
-    let params = [];
-
-    // Filtro date
-    if (data_inizio) {
-      whereClause += ' AND scadenza >= $' + (params.length + 1);
-      params.push(data_inizio);
-    }
-
-    if (data_fine) {
-      whereClause += ' AND scadenza <= $' + (params.length + 1);
-      params.push(data_fine);
-    }
-
-    // Filtro per risorsa - vede solo i suoi eventi
-    let userFilter = '';
-    if (req.user.ruolo === 'risorsa') {
-      userFilter = ' AND utente_assegnato = $' + (params.length + 1);
-      params.push(req.user.id);
-    } else if (utente_id && req.user.ruolo === 'manager') {
-      userFilter = ' AND utente_assegnato = $' + (params.length + 1);
-      params.push(utente_id);
-    }
-
     let events = [];
 
-    // Eventi Task (se tipo non specificato o include 'task')
+    // ========== EVENTI TASK ==========
     if (!tipo || tipo === 'task' || tipo.includes('task')) {
+      let taskParams = [];
+      let taskWhereClause = 'WHERE 1=1';
+      
+      // Filtro date per TASK
+      if (data_inizio) {
+        taskWhereClause += ' AND t.scadenza >= $' + (taskParams.length + 1);
+        taskParams.push(data_inizio);
+      }
+      if (data_fine) {
+        taskWhereClause += ' AND t.scadenza <= $' + (taskParams.length + 1);
+        taskParams.push(data_fine);
+      }
+
+      // Filtro utente per TASK
+      if (req.user.ruolo === 'risorsa') {
+        taskWhereClause += ' AND t.utente_assegnato = $' + (taskParams.length + 1);
+        taskParams.push(req.user.id);
+      } else if (utente_id && req.user.ruolo === 'manager') {
+        taskWhereClause += ' AND t.utente_assegnato = $' + (taskParams.length + 1);
+        taskParams.push(utente_id);
+      }
+
       const taskEvents = await query(`
         SELECT 
           t.id,
@@ -78,23 +76,34 @@ router.get('/events', authenticateToken, validateDateRange, async (req, res) => 
         JOIN attivita a ON t.attivita_id = a.id
         JOIN progetti p ON a.progetto_id = p.id
         JOIN clienti c ON p.cliente_id = c.id
-        ${whereClause} ${userFilter}
+        ${taskWhereClause}
         ORDER BY t.scadenza ASC
-      `, params);
+      `, taskParams);
 
       events = [...events, ...taskEvents.rows];
     }
 
-    // Eventi Attività (se tipo non specificato o include 'attivita')
+    // ========== EVENTI ATTIVITÀ ==========
     if (!tipo || tipo === 'attivita' || tipo.includes('attivita')) {
-      let activityUserFilter = '';
-      let activityParams = [...params];
+      let activityParams = [];
+      let activityWhereClause = 'WHERE 1=1';
+      
+      // Filtro date per ATTIVITÀ
+      if (data_inizio) {
+        activityWhereClause += ' AND a.scadenza >= $' + (activityParams.length + 1);
+        activityParams.push(data_inizio);
+      }
+      if (data_fine) {
+        activityWhereClause += ' AND a.scadenza <= $' + (activityParams.length + 1);
+        activityParams.push(data_fine);
+      }
 
+      // Filtro utente per ATTIVITÀ
       if (req.user.ruolo === 'risorsa') {
-        activityUserFilter = ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $' + (activityParams.length + 1) + ')';
+        activityWhereClause += ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $' + (activityParams.length + 1) + ')';
         activityParams.push(req.user.id);
       } else if (utente_id && req.user.ruolo === 'manager') {
-        activityUserFilter = ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $' + (activityParams.length + 1) + ')';
+        activityWhereClause += ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $' + (activityParams.length + 1) + ')';
         activityParams.push(utente_id);
       }
 
@@ -140,7 +149,7 @@ router.get('/events', authenticateToken, validateDateRange, async (req, res) => 
         LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id
         LEFT JOIN utenti u ON aa.utente_id = u.id
         LEFT JOIN task t ON a.id = t.attivita_id
-        ${whereClause.replace('scadenza', 'a.scadenza')} ${activityUserFilter}
+        ${activityWhereClause}
         GROUP BY a.id, a.nome, a.descrizione, a.scadenza, a.stato, a.ore_stimate, a.ore_effettive,
                  p.nome, p.id, c.nome
         ORDER BY a.scadenza ASC

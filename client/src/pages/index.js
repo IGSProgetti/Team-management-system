@@ -14,14 +14,8 @@ export { default as ProjectsPage } from './Projects/ProjectsPage';
 
 export { default as ClientsPage } from './Clients/ClientsPage';
 
-export const CalendarPage = () => (
-  <div>
-    <h1 className="text-2xl font-bold mb-6">Calendario</h1>
-    <div className="bg-white rounded-lg shadow p-6">
-      <p>Calendario eventi - In sviluppo</p>
-    </div>
-  </div>
-);
+// DOPO (componente completo)
+export { default as CalendarPage } from './Calendar/CalendarPage';
 
 export const ProfilePage = () => (
   <div>

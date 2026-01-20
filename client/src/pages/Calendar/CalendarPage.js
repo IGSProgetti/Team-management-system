@@ -1,0 +1,275 @@
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, Grid } from 'lucide-react';
+import { useCalendarStore } from '../../store';
+
+// Utility per formattare date
+const formatMonth = (date) => {
+  return date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+};
+
+const formatDate = (date) => {
+  return date.toLocaleDateString('it-IT');
+};
+
+// CalendarHeader Component - Navigazione e Controlli
+const CalendarHeader = ({ currentDate, onPrevious, onNext, onToday, viewMode, onViewModeChange }) => {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Titolo Mese/Anno */}
+        <div className="flex items-center gap-3">
+          <CalendarIcon className="w-6 h-6 text-blue-600" />
+          <h1 className="text-2xl font-bold text-gray-900 capitalize">
+            {formatMonth(currentDate)}
+          </h1>
+        </div>
+
+        {/* Controlli Centrali */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onPrevious}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Mese precedente"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={onToday}
+            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+          >
+            Oggi
+          </button>
+
+          <button
+            onClick={onNext}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Mese successivo"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Switch Vista */}
+        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => onViewModeChange('month')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'month'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Grid className="w-4 h-4 inline mr-1" />
+            Mese
+          </button>
+          <button
+            onClick={() => onViewModeChange('list')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <List className="w-4 h-4 inline mr-1" />
+            Lista
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// TestAPIPanel Component - Pannello di test temporaneo
+const TestAPIPanel = ({ events, statistics, loading, error }) => {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        🧪 Test API Calendario
+      </h2>
+
+      {loading && (
+        <div className="flex items-center text-blue-600">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+          Caricamento eventi...
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 font-medium">❌ Errore:</p>
+          <p className="text-red-600 text-sm mt-1">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && statistics && (
+        <div className="space-y-4">
+          {/* Statistiche */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-blue-600">{statistics.totali}</div>
+              <div className="text-xs text-blue-900">Totali</div>
+            </div>
+            <div className="bg-green-50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-green-600">{statistics.task}</div>
+              <div className="text-xs text-green-900">Task</div>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-purple-600">{statistics.attivita}</div>
+              <div className="text-xs text-purple-900">Attività</div>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-3">
+              <div className="text-2xl font-bold text-orange-600">{statistics.completati}</div>
+              <div className="text-xs text-orange-900">Completati</div>
+            </div>
+          </div>
+
+          {/* Lista Eventi (primi 5) */}
+          <div>
+            <h3 className="font-medium text-gray-900 mb-2">
+              Eventi Caricati ({events.length})
+            </h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {events.slice(0, 10).map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-start gap-3 p-2 bg-gray-50 rounded-lg text-sm"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                    style={{ backgroundColor: event.colore }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 truncate">
+                      {event.titolo}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {event.tipo === 'task' ? '📋 Task' : '📁 Attività'} •{' '}
+                      {new Date(event.scadenza).toLocaleDateString('it-IT')} •{' '}
+                      {event.stato}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="text-sm text-green-600 font-medium">
+            ✅ API Calendario Funzionante
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// CalendarPage Main Component
+const CalendarPage = () => {
+  const { currentDate, setCurrentDate, viewMode, setViewMode, goToToday } = useCalendarStore();
+  
+  const [events, setEvents] = useState([]);
+  const [statistics, setStatistics] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Carica eventi quando cambia il mese
+  useEffect(() => {
+    loadEvents();
+  }, [currentDate]);
+
+  const loadEvents = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Calcola primo e ultimo giorno del mese
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const lastDayStr = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+      const response = await fetch(
+        `/api/calendar/events?data_inizio=${firstDay}&data_fine=${lastDayStr}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Errore caricamento eventi');
+      }
+
+      const data = await response.json();
+      setEvents(data.events || []);
+      setStatistics(data.statistics || {});
+
+    } catch (err) {
+      console.error('Errore caricamento calendario:', err);
+      setError(err.message || 'Errore di connessione');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePreviousMonth = () => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() - 1);
+    setCurrentDate(newDate);
+  };
+
+  const handleNextMonth = () => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + 1);
+    setCurrentDate(newDate);
+  };
+
+  const handleToday = () => {
+    goToToday();
+  };
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <CalendarHeader
+        currentDate={currentDate}
+        onPrevious={handlePreviousMonth}
+        onNext={handleNextMonth}
+        onToday={handleToday}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+      />
+
+      {/* Test API Panel - TEMPORANEO */}
+      <TestAPIPanel
+        events={events}
+        statistics={statistics}
+        loading={loading}
+        error={error}
+      />
+
+      {/* Placeholder per Vista Calendario */}
+      <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
+        <div className="text-center text-gray-500">
+          <CalendarIcon className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+          <p className="text-lg font-medium">
+            {viewMode === 'month' ? 'Vista Mese' : 'Vista Lista'}
+          </p>
+          <p className="text-sm mt-1">
+            Calendario in costruzione - {events.length} eventi caricati
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CalendarPage;
