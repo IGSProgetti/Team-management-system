@@ -238,6 +238,9 @@ export const dashboardAPI = {
   getUsersPerformance: (params = {}) => 
     api.get('/dashboard/users-performance', { params }),
   
+  getProjectsPerformance: (params = {}) => 
+    api.get('/dashboard/projects-performance', { params }),
+  
   getProjectsCosts: (params = {}) => 
     api.get('/dashboard/projects-costs', { params }),
 };
@@ -249,6 +252,9 @@ export const calendarAPI = {
   
   createEvent: (data) => 
     api.post('/calendar/events', data),
+  
+  getUpcomingEvents: (params = {}) => 
+    api.get('/calendar/upcoming', { params }),
 };
 
 // Budget Control API
