@@ -281,7 +281,7 @@ export const useUsers = (filters = {}) => {
     refetch,
   } = useQuery(
     ['users', filters],
-    () => api.usersAPI.getUsers(filters),
+    () => api.usersAPI.getUsersList(), // ✅ USA getUsersList invece di getUsers
     {
       select: (response) => response.data,
       staleTime: 60000, // 1 minute

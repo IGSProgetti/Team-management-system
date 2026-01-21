@@ -106,6 +106,10 @@ export const usersAPI = {
   getUsers: (params = {}) => 
     api.get('/users', { params }),
   
+  // ✅ NUOVO: Lista semplice per dropdown (accessibile a tutti)
+  getUsersList: () => 
+    api.get('/users/list'),
+  
   getProfile: () => 
     api.get('/users/profile'),
   
