@@ -11,28 +11,63 @@ export const useAuthStore = create(
       loading: false,
 
       login: (userData, token) => {
-  // Salva token anche in localStorage diretto (per compatibilità)
-  localStorage.setItem('token', token);
-  
-  set({
-    user: userData,
-    token,
-    isAuthenticated: true,
-    loading: false,
-  });
-},
+        console.log('🔵 STORE LOGIN CHIAMATO');
+        console.log('📦 userData:', userData);
+        console.log('🔑 token ricevuto:', token);
+        console.log('🔑 token type:', typeof token);
+        console.log('🔑 token length:', token?.length);
+        
+        // Salva token anche in localStorage diretto (per compatibilità)
+        try {
+          localStorage.setItem('token', token);
+          console.log('✅ Token salvato in localStorage');
+          
+          // Verifica immediata
+          const verificaToken = localStorage.getItem('token');
+          console.log('🔍 Verifica immediata localStorage:', verificaToken);
+          console.log('🔍 Match?', verificaToken === token);
+        } catch (error) {
+          console.error('❌ Errore salvataggio token:', error);
+        }
+        
+        set({
+          user: userData,
+          token,
+          isAuthenticated: true,
+          loading: false,
+        });
+        
+        console.log('✅ Zustand state aggiornato');
+        
+        // Log finale dello state
+        const currentState = get();
+        console.log('📊 State finale:', {
+          hasUser: !!currentState.user,
+          hasToken: !!currentState.token,
+          isAuthenticated: currentState.isAuthenticated
+        });
+      },
 
       logout: () => {
-  // Rimuovi token anche da localStorage diretto
-  localStorage.removeItem('token');
-  
-  set({
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    loading: false,
-  });
-},
+        console.log('🔴 STORE LOGOUT CHIAMATO');
+        
+        // Rimuovi token anche da localStorage diretto
+        try {
+          localStorage.removeItem('token');
+          console.log('✅ Token rimosso da localStorage');
+        } catch (error) {
+          console.error('❌ Errore rimozione token:', error);
+        }
+        
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          loading: false,
+        });
+        
+        console.log('✅ State logout completato');
+      },
 
       updateUser: (userData) => {
         set({ user: userData });
