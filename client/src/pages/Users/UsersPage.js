@@ -536,6 +536,44 @@ const UsersPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ✅ AGGIUNGI QUESTE 3 RIGHE QUI ✅
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+
+  // Funzione per aprire il modal di conferma
+  const handleDeactivate = (user) => {
+    setSelectedUser(user);
+    setShowDeactivateModal(true);
+  };
+
+  // Funzione per confermare la disattivazione
+  const confirmDeactivate = async () => {
+    if (!selectedUser) return;
+
+    setIsDeactivating(true);
+
+    try {
+      await api.delete(`/users/${selectedUser.id}`);
+      
+      // Rimuovi l'utente dalla lista
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== selectedUser.id));
+      
+      // Chiudi modal
+      setShowDeactivateModal(false);
+      setSelectedUser(null);
+
+      // Notifica successo (opzionale)
+      console.log(`✅ Utente ${selectedUser.nome} disattivato`);
+
+    } catch (error) {
+      console.error('Errore disattivazione:', error);
+      alert(error.response?.data?.details || 'Errore durante la disattivazione');
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
   // Fetch utenti da API
   React.useEffect(() => {
     const fetchUsers = async () => {
@@ -713,7 +751,7 @@ const UsersPage = () => {
               user={user}
               onView={(user) => console.log('View:', user)}
               onEdit={(user) => console.log('Edit:', user)}
-              onDeactivate={(user) => console.log('Deactivate:', user)}
+              onDeactivate={handleDeactivate}
             />
           ))}
         </div>
@@ -750,6 +788,59 @@ const UsersPage = () => {
           onSubmit={handleUserCreated}
         />
       )}
+
+{/* ✅ AGGIUNGI QUESTO MODAL QUI ✅ */}
+      {/* Modal Conferma Disattivazione */}
+      {showDeactivateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Conferma Disattivazione
+              </h3>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Sei sicuro di voler disattivare l'utente <span className="font-semibold">{selectedUser?.nome}</span>?
+            </p>
+
+            <p className="text-sm text-gray-500 mb-6">
+              L'utente non potrà più accedere al sistema. Questa azione può essere annullata riattivando l'utente.
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeactivateModal(false);
+                  setSelectedUser(null);
+                }}
+                disabled={isDeactivating}
+                className="px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmDeactivate}
+                disabled={isDeactivating}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeactivating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Disattivazione...
+                  </>
+                ) : (
+                  'Disattiva Utente'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
