@@ -1,16 +1,26 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+// ✅ CONFIGURAZIONE PER RENDER
+const getBaseURL = () => {
+  // In produzione su Render, usa l'URL completo del backend
+  if (window.location.hostname !== 'localhost') {
+    return 'https://team-management-backend.onrender.com/api';
+  }
+  // In locale, usa il proxy o env variable
+  return process.env.REACT_APP_API_URL || '/api';
+};
+
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || '/api',
-  timeout: 10000,
+  baseURL: getBaseURL(),
+  timeout: 15000, // Aumentato a 15s per Render (cold starts)
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor - Add auth token (VERSIONE CORRETTA)
+// Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
     let token = null;
@@ -28,7 +38,6 @@ api.interceptors.request.use(
             token = authData?.state?.token;
           } catch (parseError) {
             console.warn('Error parsing auth-storage:', parseError);
-            // Fallback: prova a pulire e riprovare
             localStorage.removeItem('auth-storage');
           }
         }
@@ -42,6 +51,9 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token.trim()}`;
     }
     
+    // Log della request per debug
+    console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.baseURL}${config.url}`);
+    
     return config;
   },
   (error) => {
@@ -52,6 +64,7 @@ api.interceptors.request.use(
 // Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
+    console.log(`✅ API Response: ${response.config.method.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   (error) => {
@@ -60,9 +73,14 @@ api.interceptors.response.use(
                    error.message || 
                    'Something went wrong';
 
+    console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+      status: error.response?.status,
+      message: message,
+      data: error.response?.data
+    });
+
     // Handle specific error codes
     if (error.response?.status === 401) {
-      // Unauthorized - clear auth and redirect to login
       localStorage.removeItem('auth-storage');
       window.location.href = '/login';
       toast.error('Session expired. Please login again.');
@@ -70,10 +88,9 @@ api.interceptors.response.use(
       toast.error('Access denied. Insufficient permissions.');
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.');
-    } else if (error.code === 'NETWORK_ERROR') {
+    } else if (error.code === 'ECONNABORTED' || error.code === 'NETWORK_ERROR') {
       toast.error('Network error. Check your connection.');
     } else {
-      // Don't show toast for expected errors (like validation)
       if (!error.config?.skipErrorToast) {
         toast.error(message);
       }
@@ -106,7 +123,7 @@ export const usersAPI = {
   getUsers: (params = {}) => 
     api.get('/users', { params }),
   
-  // ✅ NUOVO: Lista semplice per dropdown (accessibile a tutti)
+  // ✅ Lista semplice per dropdown (accessibile a tutti)
   getUsersList: () => 
     api.get('/users/list'),
   
@@ -221,12 +238,8 @@ export const dashboardAPI = {
   getUsersPerformance: (params = {}) => 
     api.get('/dashboard/users-performance', { params }),
   
-  getProjectsPerformance: (params = {}) => 
-    api.get('/dashboard/projects-performance', { params }),
-  
-  // AGGIUNGI QUESTO:
-  getUserDetail: (userId) => 
-    api.get(`/dashboard/user-detail/${userId}`),
+  getProjectsCosts: (params = {}) => 
+    api.get('/dashboard/projects-costs', { params }),
 };
 
 // Calendar API
@@ -234,49 +247,23 @@ export const calendarAPI = {
   getEvents: (params = {}) => 
     api.get('/calendar/events', { params }),
   
-  getDayEvents: (date, params = {}) => 
-    api.get(`/calendar/day/${date}`, { params }),
-  
-  getWeekEvents: (startDate, params = {}) => 
-    api.get(`/calendar/week/${startDate}`, { params }),
-  
-  getMonthEvents: (year, month, params = {}) => 
-    api.get(`/calendar/month/${year}/${month}`, { params }),
-  
-  getUpcomingEvents: (params = {}) => 
-    api.get('/calendar/upcoming', { params }),
+  createEvent: (data) => 
+    api.post('/calendar/events', data),
 };
 
-// Utility functions
-export const uploadFile = (file, onProgress) => {
-  const formData = new FormData();
-  formData.append('file', file);
+// Budget Control API
+export const budgetAPI = {
+  getOverview: () => 
+    api.get('/budget/overview'),
   
-  return api.post('/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    onUploadProgress: (progressEvent) => {
-      if (onProgress) {
-        const percentage = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentage);
-      }
-    },
-  });
+  getUnusedHours: (params = {}) => 
+    api.get('/budget/unused-hours', { params }),
+  
+  reassignHours: (data) => 
+    api.post('/budget/reassign-hours', data),
+  
+  getReassignmentHistory: (params = {}) => 
+    api.get('/budget/reassignment-history', { params }),
 };
-
-// Health check
-export const healthCheck = () => api.get('/health');
-
-// Generic CRUD operations helper
-export const createCRUDAPI = (endpoint) => ({
-  getAll: (params = {}) => api.get(`/${endpoint}`, { params }),
-  create: (data) => api.post(`/${endpoint}`, data),
-  getOne: (id) => api.get(`/${endpoint}/${id}`),
-  update: (id, data) => api.put(`/${endpoint}/${id}`, data),
-  delete: (id) => api.delete(`/${endpoint}/${id}`),
-});
 
 export default api;
