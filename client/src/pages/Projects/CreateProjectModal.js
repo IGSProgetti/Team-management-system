@@ -51,16 +51,8 @@ const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
     }
 
     // USA API SENZA FILTRO (funziona!)
-    const response = await fetch('/api/clients', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    const response = await api.get('/clients');
+    
 
     const data = await response.json();
     

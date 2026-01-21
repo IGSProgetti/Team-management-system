@@ -20,6 +20,11 @@ const calendarRoutes = require('./routes/calendar');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy solo in produzione
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

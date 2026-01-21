@@ -276,7 +276,7 @@ const KanbanColumn = ({ title, status, tasks, count, onAddTask, children }) => {
         {children}
       </div>
 
-      {/* Add Task Button - FIX: Abilita sempre onAddTask */}
+      {/* Add Task Button */}
       <button 
         onClick={() => onAddTask?.(status)}
         className="w-full mt-3 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors text-sm flex items-center justify-center"
@@ -288,20 +288,18 @@ const KanbanColumn = ({ title, status, tasks, count, onAddTask, children }) => {
   );
 };
 
-// CompleteTaskModal Component - CON DOPPIA MODALITÀ
+// CompleteTaskModal Component
 const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
-  const [inputMode, setInputMode] = useState('minutes'); // 'hours' o 'minutes'
+  const [inputMode, setInputMode] = useState('minutes');
   const [hoursValue, setHoursValue] = useState('');
   const [minutesValue, setMinutesValue] = useState('');
   const [error, setError] = useState('');
 
-  // Reset valori quando cambia il task o si apre il modal
   useEffect(() => {
     if (isOpen && task) {
       setHoursValue('');
       setMinutesValue('');
       setError('');
-      // Suggerisci modalità in base alle ore stimate
       setInputMode(task.ore_stimate < 60 ? 'minutes' : 'hours');
     }
   }, [isOpen, task]);
@@ -344,7 +342,6 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
     onConfirm(task.id, totalMinutes);
   };
 
-  // Conversione real-time per mostrare l'equivalente
   const getConvertedValue = () => {
     if (inputMode === 'hours' && hoursValue) {
       const minutes = Math.round(parseFloat(hoursValue || 0) * 60);
@@ -369,13 +366,11 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Toggle Modalità Input */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Ore Effettive Lavorate *
             </label>
             
-            {/* Radio buttons per modalità */}
             <div className="flex items-center gap-4 mb-3">
               <label className="flex items-center">
                 <input
@@ -399,7 +394,6 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
               </label>
             </div>
 
-            {/* Input basato sulla modalità */}
             {inputMode === 'hours' ? (
               <div>
                 <input
@@ -437,7 +431,6 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
                   Inserisci i minuti esatti (1, 5, 15, 30, 45...)
                 </p>
                 
-                {/* Preset comuni per minuti */}
                 <div className="flex flex-wrap gap-2 mt-2">
                   {[1, 5, 10, 15, 30, 45, 60, 90, 120].map(preset => (
                     <button
@@ -453,7 +446,6 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
               </div>
             )}
 
-            {/* Conversione real-time */}
             {getConvertedValue() && (
               <p className="text-xs text-blue-600 mt-2 font-medium">
                 {getConvertedValue()}
@@ -484,7 +476,7 @@ const CompleteTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
   );
 };
 
-// Modal per configurare Task Collegata - COMPLETO
+// Modal per configurare Task Collegata
 const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
   const [linkedTaskData, setLinkedTaskData] = useState({
     nome: '',
@@ -501,7 +493,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Carica utenti disponibili
   useEffect(() => {
     if (isOpen) {
       loadUsers();
@@ -510,22 +501,9 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
 
   const loadUsers = async () => {
     try {
-      // Carica utenti reali dal nuovo endpoint /list
-      const response = await fetch('/api/users/list', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('👥 Utenti caricati dinamicamente:', data.users);
-        setUsers(data.users || []);
-      } else {
-        console.error('Errore nel caricamento utenti - Status:', response.status);
-        setUsers([]);
-      }
+      const response = await api.get('/users/list');
+      console.log('👥 Utenti caricati dinamicamente:', response.data.users);
+      setUsers(response.data.users || []);
     } catch (error) {
       console.error('Errore caricamento utenti:', error);
       setUsers([]);
@@ -535,7 +513,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Validazione
     const newErrors = {};
     if (!linkedTaskData.nome.trim()) newErrors.nome = 'Il nome è obbligatorio';
     if (!linkedTaskData.ore_stimate) newErrors.ore_stimate = 'Le ore stimate sono obbligatorie';
@@ -548,7 +525,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
       return;
     }
 
-    // Converti ore in minuti
     let oreStimateInMinuti;
     if (linkedTaskData.stimate_mode === 'hours') {
       oreStimateInMinuti = Math.round(parseFloat(linkedTaskData.ore_stimate) * 60);
@@ -585,7 +561,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Nome Task Collegata */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Nome Task *</label>
               <input
@@ -599,7 +574,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
               {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
             </div>
 
-            {/* Descrizione */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Descrizione</label>
               <textarea
@@ -611,7 +585,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
               />
             </div>
 
-            {/* Utente Assegnato */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Utente Assegnato *</label>
               {loadingUsers ? (
@@ -636,12 +609,10 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
               {errors.utente_assegnato && <p className="text-sm text-red-600 mt-1">{errors.utente_assegnato}</p>}
             </div>
 
-            {/* Grid: Ore e Priorità */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Ore Stimate *</label>
                 
-                {/* Toggle modalità */}
                 <div className="flex items-center gap-3 mb-2">
                   <label className="flex items-center">
                     <input
@@ -694,7 +665,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
                   />
                 )}
 
-                {/* Conversione real-time */}
                 {linkedTaskData.ore_stimate && (
                   <p className="text-xs text-blue-600 mt-1 font-medium">
                     {linkedTaskData.stimate_mode === 'hours' 
@@ -722,7 +692,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
               </div>
             </div>
 
-            {/* Data e Ora Scadenza */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Data Scadenza *</label>
@@ -749,7 +718,6 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
             </div>
           </div>
 
-          {/* Pulsanti */}
           <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
             <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
               Annulla
@@ -764,36 +732,35 @@ const ConfigureLinkedTaskModal = ({ isOpen, onClose, onSave, parentTask }) => {
   );
 };
 
-// CreateTaskModal Component - VERSIONE CON FALLBACK E CREAZIONE DINAMICA
+// CreateTaskModal Component
 const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
-  const { user } = useAuth(); // Utente corrente
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     nome: '',
     descrizione: '',
     ore_stimate: '',
-    stimate_mode: 'minutes', // Nuovo campo per modalità input
+    stimate_mode: 'minutes',
     scadenza_data: '',
     scadenza_ora: '',
-    attivita_id: '', // Campo per l'attività selezionata
+    attivita_id: '',
     priorita: 'medium',
-    task_collegata_config: null,  // ← CAMBIA QUESTA RIGA
-    // FALLBACK: Campi per creazione al volo se non ci sono attività
+    task_collegata_config: null,
     progetto_nome: 'Sistema Management',
     cliente_nome: 'Acme Corporation'
   });
   
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableActivities, setAvailableActivities] = useState([]); // Attività disponibili
+  const [availableActivities, setAvailableActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [showCreateOnTheFly, setShowCreateOnTheFly] = useState(false); // Modal per creazione al volo
+  const [showCreateOnTheFly, setShowCreateOnTheFly] = useState(false);
   const [showLinkedTaskModal, setShowLinkedTaskModal] = useState(false);
   const [users, setUsers] = useState([]);
 
-  // Carica attività disponibili quando si apre il modal
   useEffect(() => {
     if (isOpen) {
       loadAvailableActivities();
+      loadUsers();
     }
   }, [isOpen]);
 
@@ -803,23 +770,19 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
       const response = await activitiesAPI.getActivities();
       setAvailableActivities(response.data.activities || []);
       
-      // Se non ci sono attività, abilita la modalità "creazione al volo"
       if (!response.data.activities || response.data.activities.length === 0) {
         setShowCreateOnTheFly(true);
       }
     } catch (error) {
       console.error('Errore nel caricamento attività:', error);
-      // Fallback: abilita creazione al volo
       setShowCreateOnTheFly(true);
     } finally {
       setLoadingActivities(false);
     }
   };
 
-  // Carica utenti per task collegata
   const loadUsers = async () => {
     try {
-      // Per ora simuliamo, poi implementeremo l'API reale
       setUsers([
         { id: '1', nome: 'Mario Rossi' },
         { id: '2', nome: 'Anna Verdi' },
@@ -830,7 +793,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     }
   };
 
-  // Gestione salvataggio configurazione task collegata
   const handleSaveLinkedTask = (linkedTaskConfig) => {
     setFormData(prev => ({
       ...prev,
@@ -838,14 +800,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     }));
     setShowLinkedTaskModal(false);
   };
-
-  // Carica utenti quando si apre il modal principale
-  useEffect(() => {
-    if (isOpen) {
-      loadAvailableActivities();
-      loadUsers(); // Aggiungi questa chiamata
-    }
-  }, [isOpen]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -866,7 +820,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
       newErrors.scadenza_ora = 'L\'orario di scadenza è obbligatorio';
     }
 
-    // Validazione diversa a seconda se ci sono attività o modalità creazione
     if (!showCreateOnTheFly && !formData.attivita_id) {
       newErrors.attivita_id = 'Seleziona un\'attività';
     }
@@ -887,7 +840,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    // Rimuovi errore se l'utente ha corretto
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -901,7 +853,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
     setIsSubmitting(true);
     
     try {
-      // Conversione ore stimate in minuti
       let oreStimateInMinuti;
       if (formData.stimate_mode === 'hours') {
         oreStimateInMinuti = Math.round(parseFloat(formData.ore_stimate) * 60);
@@ -912,39 +863,32 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
       let taskData;
 
       if (showCreateOnTheFly) {
-        // MODALITÀ CREAZIONE AL VOLO: Crea cliente/progetto/attività automaticamente
         taskData = {
           nome: formData.nome,
           descrizione: formData.descrizione,
-          ore_stimate: oreStimateInMinuti, // Sempre in minuti al backend
+          ore_stimate: oreStimateInMinuti,
           scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
           utente_assegnato: user.id,
-          // Dati per creazione al volo (il backend dovrà gestirli)
           create_on_the_fly: true,
           cliente_nome: formData.cliente_nome,
           progetto_nome: formData.progetto_nome,
-          attivita_nome: `Attività per ${formData.nome}`, // Genera nome attività
-          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
+          attivita_nome: `Attività per ${formData.nome}`,
           task_collegata_config: formData.task_collegata_config
         };
       } else {
-        // MODALITÀ NORMALE: Usa attività esistente
         taskData = {
           nome: formData.nome,
           descrizione: formData.descrizione,
-          ore_stimate: oreStimateInMinuti, // Sempre in minuti al backend
+          ore_stimate: oreStimateInMinuti,
           scadenza: `${formData.scadenza_data}T${formData.scadenza_ora}:00.000Z`,
           attivita_id: formData.attivita_id,
           utente_assegnato: user.id,
-          // AGGIUNGI CONFIGURAZIONE TASK COLLEGATA
           task_collegata_config: formData.task_collegata_config
         };
       }
       
-      // Chiama la funzione del parent
       await onSubmit(taskData);
       
-      // Reset form dopo successo
       setFormData({
         nome: '',
         descrizione: '',
@@ -954,7 +898,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
         scadenza_ora: '',
         attivita_id: '',
         priorita: 'medium',
-        task_collegata_config: null,  // ← CAMBIATO
+        task_collegata_config: null,
         progetto_nome: 'Sistema Management',
         cliente_nome: 'Acme Corporation'
       });
@@ -982,7 +926,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Nome Task */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Nome Task *</label>
               <input
@@ -997,7 +940,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
             </div>
 
-            {/* Descrizione */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Descrizione</label>
               <textarea
@@ -1010,14 +952,12 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               />
             </div>
 
-            {/* Task Collegata - Configurazione Avanzata */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Task Collegata (Opzionale)
               </label>
               
               {formData.task_collegata_config ? (
-                // Mostra riepilogo task collegata configurata
                 <div className="border border-green-200 bg-green-50 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-green-800">Task Collegata Configurata</h4>
@@ -1044,7 +984,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                   </button>
                 </div>
               ) : (
-                // Pulsante per configurare task collegata
                 <button
                   type="button"
                   onClick={() => setShowLinkedTaskModal(true)}
@@ -1060,9 +999,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               </p>
             </div>
 
-            {/* SEZIONE ATTIVITÀ O CREAZIONE AL VOLO */}
             {!showCreateOnTheFly ? (
-              // MODALITÀ NORMALE: Select attività esistente
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Attività *</label>
                 {loadingActivities ? (
@@ -1101,7 +1038,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                 </div>
               </div>
             ) : (
-              // MODALITÀ CREAZIONE AL VOLO: Campi cliente/progetto
               <>
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <p className="text-sm text-yellow-800">
@@ -1154,12 +1090,10 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               </>
             )}
 
-            {/* Ore Stimate con doppia modalità */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Ore Stimate *</label>
                 
-                {/* Toggle modalità per ore stimate */}
                 <div className="flex items-center gap-3 mb-2">
                   <label className="flex items-center">
                     <input
@@ -1170,7 +1104,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                       onChange={(e) => setFormData(prev => ({ 
                         ...prev, 
                         stimate_mode: e.target.value,
-                        ore_stimate: '' // Reset valore
+                        ore_stimate: ''
                       }))}
                       className="mr-1"
                     />
@@ -1185,7 +1119,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                       onChange={(e) => setFormData(prev => ({ 
                         ...prev, 
                         stimate_mode: e.target.value,
-                        ore_stimate: '' // Reset valore
+                        ore_stimate: ''
                       }))}
                       className="mr-1"
                     />
@@ -1215,7 +1149,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                       className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.ore_stimate ? 'border-red-300' : 'border-gray-300'}`}
                       placeholder="es: 45"
                     />
-                    {/* Preset comuni per minuti */}
                     <div className="flex flex-wrap gap-1 mt-2">
                       {[5, 15, 30, 45, 60, 90, 120].map(preset => (
                         <button
@@ -1231,7 +1164,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                   </div>
                 )}
 
-                {/* Conversione real-time */}
                 {formData.ore_stimate && (
                   <p className="text-xs text-blue-600 mt-1 font-medium">
                     {formData.stimate_mode === 'hours' 
@@ -1260,7 +1192,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
               </div>
             </div>
 
-            {/* Data e Ora Scadenza */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Data Scadenza *</label>
@@ -1270,7 +1201,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
                   value={formData.scadenza_data}
                   onChange={handleInputChange}
                   className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.scadenza_data ? 'border-red-300' : 'border-gray-300'}`}
-                  min={new Date().toISOString().split('T')[0]} // Non permettere date passate
+                  min={new Date().toISOString().split('T')[0]}
                 />
                 {errors.scadenza_data && <p className="text-sm text-red-600 mt-1">{errors.scadenza_data}</p>}
               </div>
@@ -1289,7 +1220,6 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
             </div>
           </div>
 
-          {/* Pulsanti */}
           <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
             <button 
               type="button" 
@@ -1319,14 +1249,12 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
         </form>
 
-      {/* Modal Task Collegata */}
         <ConfigureLinkedTaskModal
           isOpen={showLinkedTaskModal}
           onClose={() => setShowLinkedTaskModal(false)}
           onSave={handleSaveLinkedTask}
           parentTask={formData}
         />
-
       </div>
     </div>
   );
@@ -1340,21 +1268,18 @@ const TasksPage = () => {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  // Nuovi stati per filtri temporali
   const [activeTimeFilters, setActiveTimeFilters] = useState({
     today: false,
     thisWeek: false,
     thisMonth: false
   });
 
-  // Group tasks by status
   const tasksByStatus = {
     programmata: tasks.filter(task => task.stato === 'programmata'),
     in_esecuzione: tasks.filter(task => task.stato === 'in_esecuzione'),
     completata: tasks.filter(task => task.stato === 'completata')
   };
 
-  // Helper functions per filtri temporali
   const isToday = (date) => {
     const today = new Date();
     const taskDate = new Date(date);
@@ -1377,37 +1302,30 @@ const TasksPage = () => {
     return today.getMonth() === taskDate.getMonth() && today.getFullYear() === taskDate.getFullYear();
   };
 
-  // Funzione per applicare filtri temporali (cumulativi)
   const applyTimeFilters = (taskList) => {
-    // Se nessun filtro è attivo, mostra tutte le task (escluse quelle completate)
     if (!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) {
       return taskList.filter(task => task.stato !== 'completata');
     }
 
     return taskList.filter(task => {
-      // Escludi sempre le task completate
       if (task.stato === 'completata') return false;
 
       const matchesToday = activeTimeFilters.today && isToday(task.scadenza);
       const matchesThisWeek = activeTimeFilters.thisWeek && isThisWeek(task.scadenza);
       const matchesThisMonth = activeTimeFilters.thisMonth && isThisMonth(task.scadenza);
 
-      // Logica cumulativa: se più filtri sono attivi, la task deve soddisfare ALMENO UNO
       return matchesToday || matchesThisWeek || matchesThisMonth;
     });
   };
 
-  // Applica filtri temporali alle task
   const filteredTasks = applyTimeFilters(tasks);
 
-  // Group filtered tasks by status
   const filteredTasksByStatus = {
     programmata: filteredTasks.filter(task => task.stato === 'programmata'),
     in_esecuzione: filteredTasks.filter(task => task.stato === 'in_esecuzione'),
-    completata: [] // Sempre vuoto perché escludiamo le completate nei filtri
+    completata: []
   };
 
-  // Toggle filtro temporale
   const toggleTimeFilter = (filterType) => {
     setActiveTimeFilters(prev => ({
       ...prev,
@@ -1415,7 +1333,6 @@ const TasksPage = () => {
     }));
   };
 
-  // Reset tutti i filtri
   const resetTimeFilters = () => {
     setActiveTimeFilters({
       today: false,
@@ -1424,7 +1341,6 @@ const TasksPage = () => {
     });
   };
 
-  // Handle task completion
   const handleCompleteTask = (task) => {
     setSelectedTask(task);
     setShowCompleteModal(true);
@@ -1436,22 +1352,16 @@ const TasksPage = () => {
     setSelectedTask(null);
   };
 
-  // IMPLEMENTAZIONE CORRETTA: handleCreateTask
   const handleCreateTask = async (taskData) => {
     console.log('Creating task:', taskData);
-    
-    // Chiamata corretta all'API (senza .mutateAsync)
     createTask(taskData);
-    // Il modal si chiude automaticamente nel componente CreateTaskModal
   };
 
   const handleStatusChange = (task, newStatus) => {
-    // Aggiorna immediatamente la UI
     const updatedTasks = tasks.map(t => 
       t.id === task.id ? { ...t, stato: newStatus } : t
     );
     
-    // Chiama l'API per persistere il cambiamento
     updateTask({ 
       taskId: task.id, 
       data: { stato: newStatus } 
@@ -1460,30 +1370,18 @@ const TasksPage = () => {
     console.log(`📝 Task "${task.nome}" spostata in: ${newStatus}`);
   };
 
-  const handleDeleteTask = (task) => {
+  const handleDeleteTask = async (task) => {
     if (window.confirm(`Sei sicuro di voler eliminare la task "${task.nome}"?`)) {
       console.log('🗑️ Eliminazione task:', task.nome);
       
-      fetch(`/api/tasks/${task.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      .then(r => {
-        if (r.ok) {
-          console.log('✅ Task eliminata con successo');
-          window.location.reload(); // Ricarica la pagina per aggiornare la lista
-        } else {
-          console.error('❌ Errore eliminazione task');
-          alert('Errore nell\'eliminazione della task');
-        }
-      })
-      .catch(err => {
-        console.error('❌ Errore rete:', err);
-        alert('Errore di connessione');
-      });
+      try {
+        await api.delete(`/tasks/${task.id}`);
+        console.log('✅ Task eliminata con successo');
+        window.location.reload();
+      } catch (error) {
+        console.error('❌ Errore eliminazione task:', error);
+        alert('Errore nell\'eliminazione della task');
+      }
     }
   };
 
@@ -1497,7 +1395,6 @@ const TasksPage = () => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -1507,9 +1404,7 @@ const TasksPage = () => {
             </p>
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-3">
-            {/* Time Filters */}
             <div className="flex items-center gap-2 border-r border-gray-300 pr-3">
               <button
                 onClick={resetTimeFilters}
@@ -1556,7 +1451,6 @@ const TasksPage = () => {
               </button>
             </div>
 
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -1568,13 +1462,11 @@ const TasksPage = () => {
               />
             </div>
 
-            {/* Filter */}
             <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
               <Filter className="w-4 h-4" />
               <span className="hidden sm:inline">Filtri</span>
             </button>
 
-            {/* Add Task */}
             <button 
               onClick={() => setShowCreateModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -1586,87 +1478,78 @@ const TasksPage = () => {
         </div>
       </div>
 
-      {/* Kanban Board */}
-<div className="flex-1 overflow-x-auto">
-  <div className="flex gap-6 min-w-max pb-6">
-    
-    {/* 1️⃣ Programmate Column - DA FARE */}
-    <div className="w-80 flex-shrink-0">
-      <KanbanColumn
-        title="Da Fare"
-        status="programmata"
-        tasks={filteredTasksByStatus.programmata}
-        count={filteredTasksByStatus.programmata.length}
-        onAddTask={() => setShowCreateModal(true)}
-      >
-        {filteredTasksByStatus.programmata.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onEdit={handleStatusChange}
-            onDelete={handleDeleteTask}
-          />
-        ))}
-      </KanbanColumn>
-    </div>
-
-    {/* 2️⃣ In Esecuzione Column - IN CORSO */}
-    <div className="w-80 flex-shrink-0">
-      <KanbanColumn
-        title="In Corso"
-        status="in_esecuzione"
-        tasks={filteredTasksByStatus.in_esecuzione}
-        count={filteredTasksByStatus.in_esecuzione.length}
-        onAddTask={() => setShowCreateModal(true)}
-      >
-        {filteredTasksByStatus.in_esecuzione.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onComplete={handleCompleteTask}
-            onEdit={handleStatusChange}
-            onDelete={handleDeleteTask}
-          />
-        ))}
-      </KanbanColumn>
-    </div>
-
-    {/* 3️⃣ Completate Column - COMPLETATE */}
-    <div className="w-80 flex-shrink-0">
-      <KanbanColumn
-        title="Completate"
-        status="completata"
-        tasks={tasksByStatus.completata}
-        count={activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth ? 0 : tasksByStatus.completata.length}
-        onAddTask={() => setShowCreateModal(true)}
-      >
-        {/* Mostra task completate solo se nessun filtro temporale è attivo */}
-        {(!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) && 
-          tasksByStatus.completata.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onComplete={handleCompleteTask}
-              onEdit={handleStatusChange}
-              onDelete={handleDeleteTask}
-            />
-          ))
-        }
-        
-        {/* Messaggio quando i filtri temporali sono attivi */}
-        {(activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth) && (
-          <div className="text-center text-gray-500 text-sm py-8">
-            <p>Le task completate sono</p>
-            <p>nascoste nei filtri temporali</p>
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex gap-6 min-w-max pb-6">
+          <div className="w-80 flex-shrink-0">
+            <KanbanColumn
+              title="Da Fare"
+              status="programmata"
+              tasks={filteredTasksByStatus.programmata}
+              count={filteredTasksByStatus.programmata.length}
+              onAddTask={() => setShowCreateModal(true)}
+            >
+              {filteredTasksByStatus.programmata.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onEdit={handleStatusChange}
+                  onDelete={handleDeleteTask}
+                />
+              ))}
+            </KanbanColumn>
           </div>
-        )}
-      </KanbanColumn>
-    </div>
 
-  </div>
-</div>
+          <div className="w-80 flex-shrink-0">
+            <KanbanColumn
+              title="In Corso"
+              status="in_esecuzione"
+              tasks={filteredTasksByStatus.in_esecuzione}
+              count={filteredTasksByStatus.in_esecuzione.length}
+              onAddTask={() => setShowCreateModal(true)}
+            >
+              {filteredTasksByStatus.in_esecuzione.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onComplete={handleCompleteTask}
+                  onEdit={handleStatusChange}
+                  onDelete={handleDeleteTask}
+                />
+              ))}
+            </KanbanColumn>
+          </div>
 
-      {/* Complete Task Modal */}
+          <div className="w-80 flex-shrink-0">
+            <KanbanColumn
+              title="Completate"
+              status="completata"
+              tasks={tasksByStatus.completata}
+              count={activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth ? 0 : tasksByStatus.completata.length}
+              onAddTask={() => setShowCreateModal(true)}
+            >
+              {(!activeTimeFilters.today && !activeTimeFilters.thisWeek && !activeTimeFilters.thisMonth) && 
+                tasksByStatus.completata.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={handleCompleteTask}
+                    onEdit={handleStatusChange}
+                    onDelete={handleDeleteTask}
+                  />
+                ))
+              }
+              
+              {(activeTimeFilters.today || activeTimeFilters.thisWeek || activeTimeFilters.thisMonth) && (
+                <div className="text-center text-gray-500 text-sm py-8">
+                  <p>Le task completate sono</p>
+                  <p>nascoste nei filtri temporali</p>
+                </div>
+              )}
+            </KanbanColumn>
+          </div>
+        </div>
+      </div>
+
       <CompleteTaskModal
         task={selectedTask}
         isOpen={showCompleteModal}
@@ -1677,7 +1560,6 @@ const TasksPage = () => {
         onConfirm={handleConfirmComplete}
       />
 
-      {/* Create Task Modal - VERSIONE CON FALLBACK */}
       <CreateTaskModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
