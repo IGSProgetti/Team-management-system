@@ -39,45 +39,37 @@ const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
   }, [isOpen]);
 
   const fetchClients = async () => {
-  try {
-    setLoadingClients(true);
-    
-    // Ottieni il token
-    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-    const token = authData.state?.token;
+    try {
+      setLoadingClients(true);
 
-    if (!token) {
-      throw new Error('Token non trovato');
+      // ✅ USA api.js correttamente
+      const response = await api.get('/clients');
+      
+      // ✅ I dati sono già in response.data (non serve .json())
+      const data = response.data;
+      
+      // FILTRA LATO FRONTEND (solo clienti approvati)
+      const approvedClients = (data.clients || []).filter(client => 
+        client.stato_approvazione === 'approvata'
+      );
+      
+      console.log('Clienti approvati trovati:', approvedClients);
+      setClients(approvedClients);
+
+    } catch (error) {
+      console.error('Errore fetch clienti:', error);
+      // Fallback ai dati demo come prima
+      setClients([{
+        id: '06795d22-86d2-4e60-8e08-f9642163ae6a',
+        nome: 'Acme Corporation',
+        budget: 100000.00,
+        budget_utilizzato: 65000.00,
+        budget_residuo: 35000.00
+      }]);
+    } finally {
+      setLoadingClients(false);
     }
-
-    // USA API SENZA FILTRO (funziona!)
-    const response = await api.get('/clients');
-    
-
-    const data = await response.json();
-    
-    // FILTRA LATO FRONTEND (solo clienti approvati)
-    const approvedClients = (data.clients || []).filter(client => 
-      client.stato_approvazione === 'approvata'
-    );
-    
-    console.log('Clienti approvati trovati:', approvedClients);
-    setClients(approvedClients);
-
-  } catch (error) {
-    console.error('Errore fetch clienti:', error);
-    // Fallback ai dati demo come prima
-    setClients([{
-      id: '06795d22-86d2-4e60-8e08-f9642163ae6a',
-      nome: 'Acme Corporation',
-      budget: 100000.00,
-      budget_utilizzato: 65000.00,
-      budget_residuo: 35000.00
-    }]);
-  } finally {
-    setLoadingClients(false);
-  }
-};
+  };
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -137,14 +129,6 @@ const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
       setLoading(true);
       setSubmitError('');
 
-      // Ottieni il token
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
-
-      if (!token) {
-        throw new Error('Token non trovato - effettua il login');
-      }
-
       // Prepara i dati per l'invio
       const projectData = {
         nome: formData.nome.trim(),
@@ -157,37 +141,25 @@ const CreateProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
 
       console.log('Invio dati progetto:', projectData);
 
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(projectData)
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.details || responseData.error || 'Errore creazione progetto');
-      }
-
-      console.log('Progetto creato:', responseData);
+      // ✅ USA api.js per POST
+      const response = await api.post('/projects', projectData);
+      
+      console.log('Progetto creato:', response.data);
 
       // Successo!
-      onProjectCreated && onProjectCreated(responseData.project);
+      onProjectCreated && onProjectCreated(response.data.project);
       onClose();
 
       // Mostra messaggio di successo
-      const isManagerCreated = responseData.project.stato_approvazione === 'approvata';
+      const isManagerCreated = response.data.project.stato_approvazione === 'approvata';
       alert(isManagerCreated 
-        ? `✅ Progetto "${responseData.project.nome}" creato e approvato con successo!`
-        : `✅ Progetto "${responseData.project.nome}" creato! In attesa di approvazione manager.`
+        ? `✅ Progetto "${response.data.project.nome}" creato e approvato con successo!`
+        : `✅ Progetto "${response.data.project.nome}" creato! In attesa di approvazione manager.`
       );
 
     } catch (error) {
       console.error('Errore creazione progetto:', error);
-      setSubmitError(error.message);
+      setSubmitError(error.response?.data?.details || error.response?.data?.error || error.message || 'Errore creazione progetto');
     } finally {
       setLoading(false);
     }
