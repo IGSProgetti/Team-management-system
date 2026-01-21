@@ -1179,23 +1179,12 @@ const ActivitiesPage = () => {
   // ✨ NUOVO HANDLER: Cambio stato attività  
 const handleActivityStatusChange = async (activityId, newStatus) => {
   try {
-    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-    const token = authData.state?.token;
-
-    const response = await fetch(`/api/activities/${activityId}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ stato: newStatus })
-    });
-
-    if (response.ok) {
-      window.location.reload();
-    }
+    await api.put(`/activities/${activityId}`, { stato: newStatus });
+    // Ricarica le attività senza reload della pagina
+    window.location.reload(); // Manteniamo il reload per ora per semplicità
   } catch (error) {
     console.error('Errore cambio stato:', error);
+    alert('Errore durante il cambio di stato dell\'attività');
   }
 };
 
