@@ -111,10 +111,18 @@ const { createTask, isCreating } = useTasks();
 useEffect(() => {
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users/list');
-      setUsers(response.data.users || []);
+      const token = JSON.parse(localStorage.getItem('auth-storage')).state.token;
+      const response = await fetch('/api/users/list', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      setUsers(data.users || []);
     } catch (error) {
       console.error('Errore caricamento utenti:', error);
+      setUsers([]);
     } finally {
       setUsersLoading(false);
     }
@@ -859,23 +867,31 @@ const CreateActivityForm = ({ projects, preselectedProject, onClose, onSuccess }
   const [errors, setErrors] = useState({});
   
   // ✅ NUOVO CODICE QUI
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const { createActivity, isCreating } = useActivities();
+const [users, setUsers] = useState([]);
+const [usersLoading, setUsersLoading] = useState(true);
+const { createActivity, isCreating } = useActivities();
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await api.get('/users/list');
-        setUsers(response.data.users || []);
-      } catch (error) {
-        console.error('Errore caricamento utenti:', error);
-      } finally {
-        setUsersLoading(false);
-      }
-    };
-    fetchUsers();
-  }, []);
+useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      const token = JSON.parse(localStorage.getItem('auth-storage')).state.token;
+      const response = await fetch('/api/users/list', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (error) {
+      console.error('Errore caricamento utenti:', error);
+      setUsers([]);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+  fetchUsers();
+}, []);
 
   const availableUsers = users.filter(user => user.ruolo === 'risorsa');
   // ✅ FINE NUOVO CODICE
