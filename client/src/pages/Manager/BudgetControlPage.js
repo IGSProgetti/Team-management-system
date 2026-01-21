@@ -238,7 +238,7 @@ const BudgetControlPage = () => {
             <div>
               <p className="text-sm font-medium text-gray-500 mb-1">Sovraccariche</p>
               <p className="text-3xl font-bold text-red-600">
-                {data?.statistics?.resources_sovraccariche || 0}
+                {data?.statistics?.resources_over_budget || 0}
               </p>
             </div>
             <div className="p-3 bg-red-100 rounded-lg">
