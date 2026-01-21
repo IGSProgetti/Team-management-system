@@ -1,20 +1,10 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-// ✅ CONFIGURAZIONE PER RENDER
-const getBaseURL = () => {
-  // In produzione su Render, usa l'URL completo del backend
-  if (window.location.hostname !== 'localhost') {
-    return 'https://team-management-backend.onrender.com/api';
-  }
-  // In locale, usa il proxy o env variable
-  return process.env.REACT_APP_API_URL || '/api';
-};
-
 // Create axios instance
 const api = axios.create({
-  baseURL: getBaseURL(),
-  timeout: 90000, // 90s per gestire cold starts di Render (piano gratuito)
+  baseURL: process.env.REACT_APP_API_URL || '/api',
+  timeout: 90000, // 90s per cold starts
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,10 +16,8 @@ api.interceptors.request.use(
     let token = null;
     
     try {
-      // Metodo 1: Token diretto (per compatibilità)
       token = localStorage.getItem('token');
       
-      // Metodo 2: Token da auth-storage (Zustand store)
       if (!token) {
         const authStorage = localStorage.getItem('auth-storage');
         if (authStorage) {
@@ -46,13 +34,9 @@ api.interceptors.request.use(
       console.error('Error retrieving auth token:', error);
     }
     
-    // Aggiungi token se presente e valido
     if (token && typeof token === 'string' && token.trim()) {
       config.headers.Authorization = `Bearer ${token.trim()}`;
     }
-    
-    // Log della request per debug
-    console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.baseURL}${config.url}`);
     
     return config;
   },
@@ -64,7 +48,6 @@ api.interceptors.request.use(
 // Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response: ${response.config.method.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   (error) => {
@@ -73,13 +56,6 @@ api.interceptors.response.use(
                    error.message || 
                    'Something went wrong';
 
-    console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
-      status: error.response?.status,
-      message: message,
-      data: error.response?.data
-    });
-
-    // Handle specific error codes
     if (error.response?.status === 401) {
       localStorage.removeItem('auth-storage');
       window.location.href = '/login';
@@ -88,8 +64,8 @@ api.interceptors.response.use(
       toast.error('Access denied. Insufficient permissions.');
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.');
-    } else if (error.code === 'ECONNABORTED' || error.code === 'NETWORK_ERROR') {
-      toast.error('Network error. Check your connection.');
+    } else if (error.code === 'ECONNABORTED') {
+      toast.error('Request timeout. The server may be starting up, please try again.');
     } else {
       if (!error.config?.skipErrorToast) {
         toast.error(message);
@@ -123,7 +99,6 @@ export const usersAPI = {
   getUsers: (params = {}) => 
     api.get('/users', { params }),
   
-  // ✅ Lista semplice per dropdown (accessibile a tutti)
   getUsersList: () => 
     api.get('/users/list'),
   
