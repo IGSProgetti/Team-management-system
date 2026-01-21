@@ -45,77 +45,60 @@ const RiassegnazioniStorico = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
-  const getToken = () => {
-    const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-    return authData.state?.token;
-  };
-
   // Fetch statistiche
   const fetchStatistiche = async () => {
-    try {
-      const response = await fetch('/api/riassegnazioni/statistiche', {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setStatistiche(data.statistiche);
-      }
-    } catch (error) {
-      console.error('Error fetching statistiche:', error);
+  try {
+    const response = await api.get('/riassegnazioni/statistiche');
+    if (response.data.success) {
+      setStatistiche(response.data.statistiche);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching statistiche:', error);
+  }
+};
 
   // Fetch storico riassegnazioni
   const fetchStorico = async (page = 1) => {
-    try {
-      setLoading(true);
-      const queryParams = new URLSearchParams({
-        limit: '20',
-        offset: ((page - 1) * 20).toString(),
-        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
-      });
+  try {
+    setLoading(true);
+    const params = {
+      limit: 20,
+      offset: (page - 1) * 20,
+      ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+    };
 
-      const response = await fetch(`/api/riassegnazioni/storico?${queryParams}`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        setRiassegnazioni(data.riassegnazioni);
-        setTotalPages(Math.ceil(data.total / 20));
-        setHasMore(data.has_more);
-        setCurrentPage(page);
-      }
-    } catch (error) {
-      console.error('Error fetching storico:', error);
-    } finally {
-      setLoading(false);
+    const response = await api.get('/riassegnazioni/storico', { params });
+    
+    if (response.data.success) {
+      setRiassegnazioni(response.data.riassegnazioni);
+      setTotalPages(Math.ceil(response.data.total / 20));
+      setHasMore(response.data.has_more);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching storico:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Annulla riassegnazione
-  const annullaRiassegnazione = async (id) => {
-    try {
-      const response = await fetch(`/api/riassegnazioni/${id}/annulla`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({ motivo_annullamento: motivoAnnullamento })
-      });
-
-      if (response.ok) {
-        setShowAnnullaModal(false);
-        setMotivoAnnullamento('');
-        fetchStorico(currentPage);
-        fetchStatistiche();
-        // TODO: Show success toast
-      }
-    } catch (error) {
-      console.error('Error annulling riassegnazione:', error);
+const annullaRiassegnazione = async (id) => {
+  try {
+    const response = await api.put(`/riassegnazioni/${id}/annulla`, {
+      motivo_annullamento: motivoAnnullamento
+    });
+    
+    if (response.data.success) {
+      setShowAnnullaModal(false);
+      setMotivoAnnullamento('');
+      fetchStorico(currentPage);
+      fetchStatistiche();
+      // TODO: Show success toast
     }
-  };
+  } catch (error) {
+    console.error('Error annulling riassegnazione:', error);
+  }
+};
 
   useEffect(() => {
     fetchStorico();
