@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import * as api from '../../utils/api';
 import { 
   TrendingUp, 
   Users, 
@@ -35,28 +36,16 @@ const BudgetControlPage = () => {
 
   // Fetch data from API
   const fetchBudgetData = async () => {
-    try {
-      setLoading(true);
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
-
-      if (!token) {
-        throw new Error('Token non trovato');
-      }
-
-      const response = await fetch(`/api/budget-control/resources-analysis?periodo=${selectedPeriod}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const result = await response.json();
-      setData(result);
-    } catch (error) {
-      console.error('Error fetching budget data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const response = await api.budgetAPI.getResourcesAnalysis({ periodo: selectedPeriod });
+    setData(response.data);
+  } catch (error) {
+    console.error('Error fetching budget data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchBudgetData();

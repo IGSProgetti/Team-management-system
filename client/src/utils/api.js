@@ -233,18 +233,12 @@ export const calendarAPI = {
 };
 
 // Budget Control API
-export const budgetAPI = {
-  getOverview: () => 
-    api.get('/budget/overview'),
-  
-  getUnusedHours: (params = {}) => 
-    api.get('/budget/unused-hours', { params }),
-  
-  reassignHours: (data) => 
-    api.post('/budget/reassign-hours', data),
-  
-  getReassignmentHistory: (params = {}) => 
-    api.get('/budget/reassignment-history', { params }),
-};
+   export const budgetAPI = {
+     getResourcesAnalysis: (params = {}) => 
+       api.get('/budget-control/resources-analysis', { params }),
+     
+     getTaskDetails: (risorsaId, params = {}) => 
+       api.get(`/budget-control/task-details/${risorsaId}`, { params }),
+   };
 
 export default api;

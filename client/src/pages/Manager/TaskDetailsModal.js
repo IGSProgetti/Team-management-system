@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as api from '../../utils/api';
 import { 
   X, 
   Clock, 
@@ -25,44 +26,25 @@ const TaskDetailsModal = ({ resource, isOpen, onClose, selectedPeriod }) => {
 
   // Fetch task details from API
   const fetchTaskDetails = async () => {
-    if (!resource || !isOpen) return;
+  if (!resource || !isOpen) return;
 
-    try {
-      setLoading(true);
-      setError(null);
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
-
-      if (!token) {
-        throw new Error('Token non trovato');
-      }
-
-      const queryParams = new URLSearchParams();
-      if (selectedPeriod) queryParams.append('periodo', selectedPeriod);
-
-      const response = await fetch(
-        `/api/budget-control/task-details/${resource.risorsa_id}?${queryParams}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log('API Response:', result); // Debug log
-      setTaskDetails(result);
-    } catch (error) {
-      console.error('Error fetching task details:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    setError(null);
+    
+    const params = {};
+    if (selectedPeriod) params.periodo = selectedPeriod;
+    
+    const response = await api.budgetAPI.getTaskDetails(resource.risorsa_id, params);
+    console.log('API Response:', response.data);
+    setTaskDetails(response.data);
+  } catch (error) {
+    console.error('Error fetching task details:', error);
+    setError(error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     if (isOpen) {
