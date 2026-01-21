@@ -112,7 +112,8 @@ useEffect(() => {
   const fetchUsers = async () => {
     try {
       const token = JSON.parse(localStorage.getItem('auth-storage')).state.token;
-      const response = await fetch('/api/users/list', {
+      const baseUrl = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${baseUrl}/users/list`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -875,7 +876,8 @@ useEffect(() => {
   const fetchUsers = async () => {
     try {
       const token = JSON.parse(localStorage.getItem('auth-storage')).state.token;
-      const response = await fetch('/api/users/list', {
+      const baseUrl = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${baseUrl}/users/list`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
