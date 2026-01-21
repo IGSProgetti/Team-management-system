@@ -11,22 +11,28 @@ export const useAuthStore = create(
       loading: false,
 
       login: (userData, token) => {
-        set({
-          user: userData,
-          token,
-          isAuthenticated: true,
-          loading: false,
-        });
-      },
+  // Salva token anche in localStorage diretto (per compatibilità)
+  localStorage.setItem('token', token);
+  
+  set({
+    user: userData,
+    token,
+    isAuthenticated: true,
+    loading: false,
+  });
+},
 
       logout: () => {
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-          loading: false,
-        });
-      },
+  // Rimuovi token anche da localStorage diretto
+  localStorage.removeItem('token');
+  
+  set({
+    user: null,
+    token: null,
+    isAuthenticated: false,
+    loading: false,
+  });
+},
 
       updateUser: (userData) => {
         set({ user: userData });
