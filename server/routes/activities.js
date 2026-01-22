@@ -32,59 +32,62 @@ router.get('/', authenticateToken, async (req, res) => {
       params.push(stato);
     }
 
-    // ✅ QUERY CORRETTA CON GESTIONE NULL-SAFE
-    const result = await query(`
-      SELECT 
-        a.id, 
-        a.nome, 
-        a.descrizione, 
-        a.ore_stimate, 
-        a.scadenza, 
-        a.stato,
-        a.data_creazione, 
-        a.data_aggiornamento,
-        -- Progetto e cliente info
-        p.nome as progetto_nome, 
-        p.id as progetto_id,
-        c.nome as cliente_nome,
-        c.id as cliente_id,
-        -- ✅ CALCOLI SAFE CON COALESCE (gestisce NULL)
-        COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
-        COALESCE(COUNT(t.id), 0) as totale_task,
-        COALESCE(COUNT(CASE WHEN t.stato = 'completata' THEN 1 END), 0) as task_completate,
-        COALESCE(COUNT(CASE WHEN t.stato = 'in_esecuzione' THEN 1 END), 0) as task_in_corso,
-        COALESCE(COUNT(CASE WHEN t.stato = 'programmata' THEN 1 END), 0) as task_programmate,
-        -- ✅ Percentuale completamento SAFE (evita divisione per zero)
-        CASE 
-          WHEN COUNT(t.id) > 0 THEN 
-            ROUND((COUNT(CASE WHEN t.stato = 'completata' THEN 1 END)::decimal / COUNT(t.id)) * 100, 0)
-          ELSE 0
-        END as percentuale_completamento,
-        -- ✅ Scostamento ore SAFE
-        CASE 
-          WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
-            ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
-          ELSE 0
-        END as scostamento_percentuale,
-        -- ✅ In ritardo SAFE
-        CASE 
-          WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
-          ELSE false 
-        END as in_ritardo
-      FROM attivita a
-      JOIN progetti p ON a.progetto_id = p.id
-      JOIN clienti c ON p.cliente_id = c.id
-      LEFT JOIN task t ON a.id = t.attivita_id  -- ✅ LEFT JOIN per gestire attività senza task
-      ${whereClause}
-      GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato,
-               a.data_creazione, a.data_aggiornamento,
-               p.nome, p.id, c.nome, c.id
-      ORDER BY 
-        CASE WHEN a.stato = 'in_esecuzione' THEN 1 
-             WHEN a.stato = 'programmata' THEN 2 
-             ELSE 3 END,
-        a.scadenza ASC
-    `, params);
+    // ✅ QUERY CORRETTA CON CONTEGGIO RISORSE
+const result = await query(`
+  SELECT 
+    a.id, 
+    a.nome, 
+    a.descrizione, 
+    a.ore_stimate, 
+    a.scadenza, 
+    a.stato,
+    a.data_creazione, 
+    a.data_aggiornamento,
+    -- Progetto e cliente info
+    p.nome as progetto_nome, 
+    p.id as progetto_id,
+    c.nome as cliente_nome,
+    c.id as cliente_id,
+    -- ✅ CONTEGGIO RISORSE ASSEGNATE
+    COUNT(DISTINCT aa.utente_id) as numero_risorse,
+    -- ✅ CALCOLI SAFE CON COALESCE (gestisce NULL)
+    COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
+    COALESCE(COUNT(DISTINCT t.id), 0) as totale_task,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END), 0) as task_completate,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'in_esecuzione' THEN t.id END), 0) as task_in_corso,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'programmata' THEN t.id END), 0) as task_programmate,
+    -- ✅ Percentuale completamento SAFE (evita divisione per zero)
+    CASE 
+      WHEN COUNT(DISTINCT t.id) > 0 THEN 
+        ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
+      ELSE 0
+    END as percentuale_completamento,
+    -- ✅ Scostamento ore SAFE
+    CASE 
+      WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
+        ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
+      ELSE 0
+    END as scostamento_percentuale,
+    -- ✅ In ritardo SAFE
+    CASE 
+      WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
+      ELSE false 
+    END as in_ritardo
+  FROM attivita a
+  JOIN progetti p ON a.progetto_id = p.id
+  JOIN clienti c ON p.cliente_id = c.id
+  LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id  -- ✅ AGGIUNTO JOIN RISORSE
+  LEFT JOIN task t ON a.id = t.attivita_id
+  ${whereClause}
+  GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato,
+           a.data_creazione, a.data_aggiornamento,
+           p.nome, p.id, c.nome, c.id
+  ORDER BY 
+    CASE WHEN a.stato = 'in_esecuzione' THEN 1 
+         WHEN a.stato = 'programmata' THEN 2 
+         ELSE 3 END,
+    a.scadenza ASC
+`, params);
 
     res.json({ 
       activities: result.rows,
