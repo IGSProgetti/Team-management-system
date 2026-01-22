@@ -218,6 +218,9 @@ export const dashboardAPI = {
   
   getProjectsCosts: (params = {}) => 
     api.get('/dashboard/projects-costs', { params }),
+  
+  getUserDetail: (userId) => 
+    api.get(`/dashboard/user-detail/${userId}`),
 };
 
 // Calendar API
