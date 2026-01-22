@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, Grid } from 'lucide-react';
 import { useCalendarStore } from '../../store';
 import CalendarMonth from './CalendarMonth';
+import CalendarList from './CalendarList';
+import CalendarFilters from './CalendarFilters';
 
 // Utility per formattare date
 const formatMonth = (date) => {
@@ -312,11 +314,75 @@ const CalendarPage = () => {
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [dailyCapacity, setDailyCapacity] = useState(null);
   
   // Modal dettaglio giorno
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedDayEvents, setSelectedDayEvents] = useState(null);
   const [showDayModal, setShowDayModal] = useState(false);
+
+  // Filtri
+  const [filters, setFilters] = useState({
+    cliente: '',
+    progetto: '',
+    attivita: '',
+    tipo: 'all',
+    stato: 'all',
+    risorsa: '',
+    solo_mie: false  // ← NUOVO
+  });
+
+  // Applica filtri agli eventi
+  const getFilteredEvents = () => {
+    let filtered = events;
+
+    if (filters.cliente) {
+      filtered = filtered.filter(e => e.cliente_nome === filters.cliente);
+    }
+
+    if (filters.progetto) {
+      filtered = filtered.filter(e => e.progetto_nome === filters.progetto);
+    }
+
+    if (filters.attivita) {
+      filtered = filtered.filter(e => e.attivita_nome === filters.attivita);
+    }
+
+    if (filters.risorsa) {
+      filtered = filtered.filter(e => e.utente_nome === filters.risorsa);
+    }
+
+    if (filters.tipo !== 'all') {
+      filtered = filtered.filter(e => e.tipo === filters.tipo);
+    }
+
+    if (filters.stato !== 'all') {
+      filtered = filtered.filter(e => e.stato === filters.stato);
+    }
+
+    // Filtro "Solo mie attività" (task assegnate all'utente loggato)
+    if (filters.solo_mie) {
+      // Ottieni l'utente dal localStorage o dalla prop
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      if (currentUser.id) {
+        filtered = filtered.filter(e => {
+          // Per le task, filtra per utente_id
+          if (e.tipo === 'task') {
+            return e.utente_id === currentUser.id;
+          }
+          // Per le attività, mantieni tutte (o filtra se vuoi)
+          return true;
+        });
+      }
+    }
+
+    return filtered;
+  };
+
+  const filteredEvents = getFilteredEvents();
+
+  // Carica eventi quando cambia il mese
+
 
   // Carica eventi quando cambia il mese
   useEffect(() => {
@@ -352,6 +418,7 @@ const CalendarPage = () => {
       const data = await response.json();
       setEvents(data.events || []);
       setStatistics(data.statistics || {});
+      setDailyCapacity(data.daily_capacity || null);
 
     } catch (err) {
       console.error('Errore caricamento calendario:', err);
@@ -393,6 +460,20 @@ const CalendarPage = () => {
     setSelectedDayEvents(null);
   };
 
+  const handleFiltersChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleEventClick = (event) => {
+    // Apri modal con dettaglio evento singolo
+    setSelectedDate(new Date(event.scadenza));
+    setSelectedDayEvents({
+      task: event.tipo === 'task' ? [event] : [],
+      attivita: event.tipo === 'attivita' ? [event] : []
+    });
+    setShowDayModal(true);
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -404,6 +485,15 @@ const CalendarPage = () => {
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
       />
+
+      {/* Filtri */}
+      <div className="mb-6">
+        <CalendarFilters
+          events={events}
+          onFiltersChange={handleFiltersChange}
+          currentFilters={filters}
+        />
+      </div>
 
       {/* Vista Calendario */}
       {loading && (
@@ -427,17 +517,15 @@ const CalendarPage = () => {
           {viewMode === 'month' ? (
             <CalendarMonth
               currentDate={currentDate}
-              events={events}
+              events={filteredEvents}
+              dailyCapacity={dailyCapacity}
               onDayClick={handleDayClick}
             />
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="text-center text-gray-500">
-                <List className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                <p className="text-lg font-medium">Vista Lista</p>
-                <p className="text-sm mt-1">In sviluppo - {events.length} eventi caricati</p>
-              </div>
-            </div>
+            <CalendarList
+              events={filteredEvents}
+              onEventClick={handleEventClick}
+            />
           )}
         </>
       )}

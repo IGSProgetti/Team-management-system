@@ -4,22 +4,20 @@ import toast from 'react-hot-toast';
 // Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || '/api',
-  timeout: 10000,
+  timeout: 90000, // 90s per cold starts
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor - Add auth token (VERSIONE CORRETTA)
+// Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
     let token = null;
     
     try {
-      // Metodo 1: Token diretto (per compatibilità)
       token = localStorage.getItem('token');
       
-      // Metodo 2: Token da auth-storage (Zustand store)
       if (!token) {
         const authStorage = localStorage.getItem('auth-storage');
         if (authStorage) {
@@ -28,7 +26,6 @@ api.interceptors.request.use(
             token = authData?.state?.token;
           } catch (parseError) {
             console.warn('Error parsing auth-storage:', parseError);
-            // Fallback: prova a pulire e riprovare
             localStorage.removeItem('auth-storage');
           }
         }
@@ -37,7 +34,6 @@ api.interceptors.request.use(
       console.error('Error retrieving auth token:', error);
     }
     
-    // Aggiungi token se presente e valido
     if (token && typeof token === 'string' && token.trim()) {
       config.headers.Authorization = `Bearer ${token.trim()}`;
     }
@@ -60,9 +56,7 @@ api.interceptors.response.use(
                    error.message || 
                    'Something went wrong';
 
-    // Handle specific error codes
     if (error.response?.status === 401) {
-      // Unauthorized - clear auth and redirect to login
       localStorage.removeItem('auth-storage');
       window.location.href = '/login';
       toast.error('Session expired. Please login again.');
@@ -70,10 +64,9 @@ api.interceptors.response.use(
       toast.error('Access denied. Insufficient permissions.');
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.');
-    } else if (error.code === 'NETWORK_ERROR') {
-      toast.error('Network error. Check your connection.');
+    } else if (error.code === 'ECONNABORTED') {
+      toast.error('Request timeout. The server may be starting up, please try again.');
     } else {
-      // Don't show toast for expected errors (like validation)
       if (!error.config?.skipErrorToast) {
         toast.error(message);
       }
@@ -105,6 +98,9 @@ export const authAPI = {
 export const usersAPI = {
   getUsers: (params = {}) => 
     api.get('/users', { params }),
+  
+  getUsersList: () => 
+    api.get('/users/list'),
   
   getProfile: () => 
     api.get('/users/profile'),
@@ -220,11 +216,8 @@ export const dashboardAPI = {
   getProjectsPerformance: (params = {}) => 
     api.get('/dashboard/projects-performance', { params }),
   
-  getPendingApprovals: () => 
-    api.get('/dashboard/pending-approvals'),
-  
-  getHoursAnalytics: (params = {}) => 
-    api.get('/dashboard/hours-analytics', { params }),
+  getProjectsCosts: (params = {}) => 
+    api.get('/dashboard/projects-costs', { params }),
 };
 
 // Calendar API
@@ -232,49 +225,20 @@ export const calendarAPI = {
   getEvents: (params = {}) => 
     api.get('/calendar/events', { params }),
   
-  getDayEvents: (date, params = {}) => 
-    api.get(`/calendar/day/${date}`, { params }),
-  
-  getWeekEvents: (startDate, params = {}) => 
-    api.get(`/calendar/week/${startDate}`, { params }),
-  
-  getMonthEvents: (year, month, params = {}) => 
-    api.get(`/calendar/month/${year}/${month}`, { params }),
+  createEvent: (data) => 
+    api.post('/calendar/events', data),
   
   getUpcomingEvents: (params = {}) => 
     api.get('/calendar/upcoming', { params }),
 };
 
-// Utility functions
-export const uploadFile = (file, onProgress) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  return api.post('/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    onUploadProgress: (progressEvent) => {
-      if (onProgress) {
-        const percentage = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentage);
-      }
-    },
-  });
-};
-
-// Health check
-export const healthCheck = () => api.get('/health');
-
-// Generic CRUD operations helper
-export const createCRUDAPI = (endpoint) => ({
-  getAll: (params = {}) => api.get(`/${endpoint}`, { params }),
-  create: (data) => api.post(`/${endpoint}`, data),
-  getOne: (id) => api.get(`/${endpoint}/${id}`),
-  update: (id, data) => api.put(`/${endpoint}/${id}`, data),
-  delete: (id) => api.delete(`/${endpoint}/${id}`),
-});
+// Budget Control API
+   export const budgetAPI = {
+     getResourcesAnalysis: (params = {}) => 
+       api.get('/budget-control/resources-analysis', { params }),
+     
+     getTaskDetails: (risorsaId, params = {}) => 
+       api.get(`/budget-control/task-details/${risorsaId}`, { params }),
+   };
 
 export default api;

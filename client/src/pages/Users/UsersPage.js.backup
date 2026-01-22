@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../../utils/api';
 import { 
   Plus, 
   Users, 
@@ -244,52 +245,31 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
     setIsSubmitting(true);
     
     try {
-  // ✅ CORREZIONE: Ottieni il token dall'auth-storage
-  const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-  const token = authData.state?.token;
-
-  if (!token) {
-    throw new Error('Token non trovato - effettua il login');
-  }
-
-  // Chiamata API reale
-  const response = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`, // ✅ Ora usa il token corretto
-      'Content-Type': 'application/json'
-    },
-        body: JSON.stringify({
-          nome: formData.nome.trim(),
-          email: formData.email.trim(),
-          password: formData.password,
-          ruolo: formData.ruolo,
-          compenso_annuale: parseFloat(formData.compenso_annuale),
-          costo_orario_manuale: formData.costo_orario_manuale,
-          costo_orario: formData.costo_orario_manuale ? parseFloat(formData.costo_orario) : null,
-          ore_disponibili_manuale: formData.ore_disponibili_manuale,
-          ore_disponibili: formData.ore_disponibili_manuale ? parseInt(formData.ore_disponibili) : null
-        })
+      // ✅ USA api.js per registrazione
+      const response = await api.post('/auth/register', {
+        nome: formData.nome.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        ruolo: formData.ruolo,
+        compenso_annuale: parseFloat(formData.compenso_annuale),
+        costo_orario_manuale: formData.costo_orario_manuale,
+        costo_orario: formData.costo_orario_manuale ? parseFloat(formData.costo_orario) : null,
+        ore_disponibili_manuale: formData.ore_disponibili_manuale,
+        ore_disponibili: formData.ore_disponibili_manuale ? parseInt(formData.ore_disponibili) : null
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || 'Errore durante la creazione');
-      }
-
-      const result = await response.json();
-      console.log('Utente creato:', result);
+      console.log('Utente creato:', response.data);
 
       // Notifica successo
-      alert(`Utente ${formData.nome} creato con successo!`); // Sostituire con toast
+      alert(`Utente ${formData.nome} creato con successo!`);
       
       // Chiudi modal e callback
       onClose();
-      if (onSubmit) onSubmit(result.user);
+      if (onSubmit) onSubmit(response.data.user);
       
     } catch (error) {
       console.error('Errore creazione utente:', error);
-      setErrors({ submit: error.message });
+      setErrors({ submit: error.response?.data?.details || error.message || 'Errore durante la creazione' });
     } finally {
       setIsSubmitting(false);
     }
@@ -558,30 +538,13 @@ const UsersPage = () => {
 
   // Fetch utenti da API
   React.useEffect(() => {
-  const fetchUsers = async () => {
-    try {
-      // ✅ CORREZIONE: Usa il token dall'auth-storage
-      const authData = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-      const token = authData.state?.token;
-
-      if (!token) {
-        throw new Error('Token non trovato - effettua il login');
-      }
-
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`, // ✅ Ora usa il token corretto
-          'Content-Type': 'application/json'
-        }
-      });
+    const fetchUsers = async () => {
+      try {
+        // ✅ USA api.js
+        const response = await api.get('/users');
         
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Utenti caricati:', data.users);
-          setUsers(data.users || []);
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        console.log('Utenti caricati:', response.data.users);
+        setUsers(response.data.users || []);
       } catch (error) {
         console.error('Errore fetch utenti:', error);
         // Nessun fallback per gli utenti - è una pagina manager only
