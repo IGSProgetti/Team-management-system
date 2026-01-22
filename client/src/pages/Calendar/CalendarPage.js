@@ -4,6 +4,8 @@ import { useCalendarStore } from '../../store';
 import CalendarMonth from './CalendarMonth';
 import CalendarList from './CalendarList';
 import CalendarFilters from './CalendarFilters';
+import api from '../../utils/api';
+
 
 // Utility per formattare date
 const formatMonth = (date) => {
@@ -401,28 +403,22 @@ const CalendarPage = () => {
       const lastDay = new Date(year, month, 0).getDate();
       const lastDayStr = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
 
-      const response = await fetch(
-        `/api/calendar/events?data_inizio=${firstDay}&data_fine=${lastDayStr}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+     // ✅ USA API INVECE DI FETCH
+const response = await api.get('/calendar/events', {
+  params: {
+    data_inizio: firstDay,
+    data_fine: lastDayStr
+  }
+});
 
-      if (!response.ok) {
-        throw new Error('Errore caricamento eventi');
-      }
-
-      const data = await response.json();
-      setEvents(data.events || []);
-      setStatistics(data.statistics || {});
-      setDailyCapacity(data.daily_capacity || null);
+// Axios parsifica automaticamente il JSON
+setEvents(response.data.events || []);
+setStatistics(response.data.statistics || {});
+setDailyCapacity(response.data.daily_capacity || null); 
 
     } catch (err) {
-      console.error('Errore caricamento calendario:', err);
-      setError(err.message || 'Errore di connessione');
+      console.error('❌ Errore caricamento calendario:', err);
+      setError(err.response?.data?.details || err.message || 'Errore di connessione');
     } finally {
       setLoading(false);
     }
