@@ -133,10 +133,10 @@ router.get('/clienti', authenticateToken, requireManager, async (req, res) => {
         c.id,
         c.nome,
         c.descrizione,
-        c.budget as budget_totale,
-        COALESCE(SUM(po.progetto_ore_assegnate), 0) as ore_assegnate_progetti,
-        COALESCE(SUM(po.progetto_ore_effettive), 0) as ore_effettive,
-        c.budget - COALESCE(SUM(po.progetto_ore_assegnate), 0) as ore_disponibili,
+        c.budget as budget_totale_euro,
+        COALESCE(SUM(po.progetto_ore_assegnate), 0) as budget_assegnato_progetti_euro,
+        COALESCE(SUM(po.progetto_ore_effettive) / 60.0, 0) as ore_effettive_totali,
+        c.budget - COALESCE(SUM(po.progetto_ore_assegnate), 0) as budget_disponibile_euro,
         COUNT(DISTINCT po.progetto_id) as numero_progetti,
         COUNT(DISTINCT CASE WHEN po.progetto_scadenza < NOW() 
           AND po.stato_approvazione != 'approvata' THEN po.progetto_id END) as progetti_in_ritardo,
@@ -153,11 +153,10 @@ router.get('/clienti', authenticateToken, requireManager, async (req, res) => {
     // Calcola delta per ogni cliente
     const clienti = result.rows.map(cliente => ({
       ...cliente,
-      delta_budget: parseFloat(cliente.budget_totale || 0) - parseFloat(cliente.ore_effettive || 0),
-      delta_efficienza: parseFloat(cliente.ore_assegnate_progetti || 0) - parseFloat(cliente.ore_effettive || 0),
-      ore_effettive: parseFloat(cliente.ore_effettive || 0),
-      ore_assegnate_progetti: parseFloat(cliente.ore_assegnate_progetti || 0),
-      ore_disponibili: parseFloat(cliente.ore_disponibili || 0),
+      budget_totale_euro: parseFloat(cliente.budget_totale_euro || 0),
+      budget_assegnato_progetti_euro: parseFloat(cliente.budget_assegnato_progetti_euro || 0),
+      ore_effettive_totali: parseFloat(cliente.ore_effettive_totali || 0),
+      budget_disponibile_euro: parseFloat(cliente.budget_disponibile_euro || 0),
       progetti_in_ritardo: parseInt(cliente.progetti_in_ritardo || 0),
       task_in_ritardo_totali: parseInt(cliente.task_in_ritardo_totali || 0)
     }));
@@ -256,11 +255,11 @@ router.get('/progetti/:clienteId', authenticateToken, requireManager, async (req
         p.nome,
         p.descrizione,
         p.cliente_id,
-        p.budget_assegnato as ore_assegnate,
+        p.budget_assegnato as budget_assegnato_euro,
         p.scadenza,
         p.stato_approvazione,
-        COALESCE(SUM(ao.area_ore_assegnate), 0) as ore_assegnate_aree,
-        COALESCE(SUM(ao.area_ore_effettive), 0) as ore_effettive,
+        COALESCE(SUM(ao.area_ore_assegnate) / 60.0, 0) as ore_assegnate_aree,
+        COALESCE(SUM(ao.area_ore_effettive) / 60.0, 0) as ore_effettive,
         COUNT(DISTINCT ao.area_id) as numero_aree,
         COUNT(DISTINCT CASE WHEN ao.area_scadenza < NOW() 
           AND ao.area_stato != 'completata' THEN ao.area_id END) as aree_in_ritardo,
@@ -279,10 +278,9 @@ router.get('/progetti/:clienteId', authenticateToken, requireManager, async (req
     
     const progetti = result.rows.map(progetto => ({
       ...progetto,
-      ore_assegnate: parseFloat(progetto.ore_assegnate || 0),
+      budget_assegnato_euro: parseFloat(progetto.budget_assegnato_euro || 0),
       ore_assegnate_aree: parseFloat(progetto.ore_assegnate_aree || 0),
       ore_effettive: parseFloat(progetto.ore_effettive || 0),
-      delta: parseFloat(progetto.ore_assegnate || 0) - parseFloat(progetto.ore_effettive || 0),
       aree_in_ritardo: parseInt(progetto.aree_in_ritardo || 0),
       task_in_ritardo_totali: parseInt(progetto.task_in_ritardo_totali || 0)
     }));
@@ -382,11 +380,11 @@ router.get('/aree/:progettoId', authenticateToken, requireManager, async (req, r
         a.descrizione,
         a.progetto_id,
         a.coordinatore_id,
-        a.ore_stimate as ore_assegnate,
+        a.ore_stimate / 60.0 as ore_assegnate,
         a.scadenza,
         a.stato,
-        COALESCE(SUM(ato.attivita_ore_assegnate), 0) as ore_assegnate_attivita,
-        COALESCE(SUM(ato.attivita_ore_effettive), 0) as ore_effettive,
+        COALESCE(SUM(ato.attivita_ore_assegnate) / 60.0, 0) as ore_assegnate_attivita,
+        COALESCE(SUM(ato.attivita_ore_effettive) / 60.0, 0) as ore_effettive,
         COUNT(DISTINCT ato.attivita_id) as numero_attivita,
         COUNT(DISTINCT CASE WHEN ato.attivita_scadenza < NOW() 
           AND ato.attivita_stato != 'completata' THEN ato.attivita_id END) as attivita_in_ritardo,
@@ -491,15 +489,15 @@ router.get('/attivita/:areaId', authenticateToken, requireManager, async (req, r
         att.descrizione,
         att.progetto_id,
         att.area_id,
-        att.ore_stimate as ore_assegnate,
-        att.ore_effettive,
+        att.ore_stimate / 60.0 as ore_assegnate,
+        att.ore_effettive / 60.0 as ore_effettive,
         att.scadenza,
         att.stato,
         COUNT(td.task_id) as numero_task,
         COUNT(CASE WHEN td.stato = 'completata' THEN 1 END) as task_completate,
         COUNT(CASE WHEN td.stato != 'completata' AND td.scadenza < NOW() THEN 1 END) as task_in_ritardo,
-        COALESCE(SUM(td.ore_stimate), 0) as task_ore_stimate_totali,
-        COALESCE(SUM(td.ore_effettive), 0) as task_ore_effettive_totali,
+        COALESCE(SUM(td.ore_stimate) / 60.0, 0) as task_ore_stimate_totali,
+        COALESCE(SUM(td.ore_effettive) / 60.0, 0) as task_ore_effettive_totali,
         a.nome as area_nome,
         p.nome as progetto_nome,
         c.nome as cliente_nome,
@@ -625,8 +623,8 @@ router.get('/tasks/:attivitaId', authenticateToken, requireManager, async (req, 
     const tasks = result.rows.map(task => {
       const scadenza = new Date(task.scadenza);
       const isInRitardo = scadenza < now && task.stato !== 'completata';
-      const oreStimate = parseFloat(task.ore_stimate || 0);
-      const oreEffettive = parseFloat(task.ore_effettive || 0);
+      const oreStimate = parseFloat(task.ore_stimate || 0) / 60;
+      const oreEffettive = parseFloat(task.ore_effettive || 0) / 60;
       
       return {
         ...task,
