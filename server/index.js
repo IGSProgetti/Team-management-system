@@ -4,7 +4,6 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
-const riassegnazioniRoutes = require('./routes/riassegnazioni');
 require('dotenv').config();
 
 const { pool } = require('./config/database');
@@ -16,13 +15,15 @@ const activityRoutes = require('./routes/activities');
 const taskRoutes = require('./routes/tasks');
 const dashboardRoutes = require('./routes/dashboard');
 const calendarRoutes = require('./routes/calendar');
+const riassegnazioniRoutes = require('./routes/riassegnazioni');
 const budgetControlRoutes = require('./routes/budget-control');
-
-// 🆕 NUOVO: Import nuove route
+const budgetControlAdvancedRoutes = require('./routes/budget-control-advanced');
 const areeRoutes = require('./routes/aree');
 const marginiRoutes = require('./routes/margini');
 const bonusRoutes = require('./routes/bonus');
-const budgetControlAdvancedRoutes = require('./routes/budget-control-advanced');
+const performanceRoutes = require('./routes/performance');
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,12 +62,11 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/riassegnazioni', riassegnazioniRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/budget-control', budgetControlRoutes);
-
-// 🆕 NUOVO: Registrazione nuove route
+app.use('/api/budget-control-advanced', budgetControlAdvancedRoutes);
+app.use('/api/performance', performanceRoutes);
 app.use('/api/aree', areeRoutes);
 app.use('/api/margini', marginiRoutes);
 app.use('/api/bonus', bonusRoutes);
-app.use('/api/budget-control-advanced', budgetControlAdvancedRoutes);
 
 // Health check
 app.get('/api/health', async (req, res) => {

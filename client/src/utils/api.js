@@ -244,4 +244,53 @@ export const calendarAPI = {
        api.get(`/budget-control/task-details/${risorsaId}`, { params }),
    };
 
+
+
+// 🆕 NUOVE API - Budget Control Advanced
+export const budgetControlAdvancedAPI = {
+  getOverview: (params) => api.get('/budget-control-advanced/overview', { params }),
+  getResources: (params) => api.get('/budget-control-advanced/risorse', { params }),
+  getProjects: (params) => api.get('/budget-control-advanced/progetti', { params }),
+  redistribuisci: (data) => api.post('/budget-control-advanced/redistribuisci', data),
+  getLog: (params) => api.get('/budget-control-advanced/log', { params }),
+  getDisponibilita: (risorsaId, params) => api.get(`/budget-control-advanced/disponibilita/${risorsaId}`, { params }),
+};
+
+// 🆕 API Aree
+export const areeAPI = {
+  getAll: (params) => api.get('/aree', { params }),
+  getById: (id) => api.get(`/aree/${id}`),
+  create: (data) => api.post('/aree', data),
+  update: (id, data) => api.put(`/aree/${id}`, data),
+  delete: (id) => api.delete(`/aree/${id}`),
+};
+
+// 🆕 API Margini
+export const marginiAPI = {
+  getByProgetto: (progettoId) => api.get(`/margini/progetto/${progettoId}`),
+  create: (data) => api.post('/margini', data),
+  update: (id, data) => api.put(`/margini/${id}`, data),
+  delete: (id) => api.delete(`/margini/${id}`),
+  anteprima: (data) => api.post('/margini/anteprima', data),
+};
+
+// 🆕 API Bonus
+export const bonusAPI = {
+  getAll: (params) => api.get('/bonus', { params }),
+  getTotaleRisorsa: (risorsaId) => api.get(`/bonus/risorsa/${risorsaId}/totale`),
+  calcola: (data) => api.post('/bonus/calcola', data),
+  approva: (id, data) => api.put(`/bonus/${id}/approva`, data),
+  rifiuta: (id, data) => api.put(`/bonus/${id}/rifiuta`, data),
+  gestisciNegativo: (id, data) => api.post(`/bonus/${id}/gestisci-negativo`, data),
+};
+
+// Performance API
+export const performanceAPI = {
+  getClienti: (params) => api.get('/performance/clienti', { params }),
+  getProgetti: (clienteId, params) => api.get(`/performance/progetti/${clienteId}`, { params }),
+  getAree: (progettoId, params) => api.get(`/performance/aree/${progettoId}`, { params }),
+  getAttivita: (areaId, params) => api.get(`/performance/attivita/${areaId}`, { params }),
+  getTasks: (attivitaId, params) => api.get(`/performance/tasks/${attivitaId}`, { params }),
+};
+
 export default api;
