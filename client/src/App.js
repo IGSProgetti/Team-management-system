@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AreaDetailPage, AreasPage } from './pages/Areas';
 
 // Store
 import { useAuthStore, useUIStore } from './store';
@@ -209,6 +210,10 @@ function App() {
                   <Route path="projects" element={<ProjectsPage />} />
                   <Route path="clients" element={<ClientsPage />} />
                   <Route path="clients/:id" element={<ClientDetail />} />
+                  
+                  {/* Areas - NUOVE ROUTES */}
+                  <Route path="areas" element={<AreasPage />} />
+                  <Route path="areas/:id" element={<AreaDetailPage />} />
 
                   {/* Calendar */}
                   <Route path="calendar" element={<CalendarPage />} />
@@ -235,15 +240,14 @@ function App() {
                     }
                   />
 
-                  {/* AGGIUNGI QUESTA ROUTE QUI */}
-<Route
-  path="riassegnazioni"
-  element={
-    <ManagerRoute>
-      <RiassegnazioniStorico />
-    </ManagerRoute>
-  }
-/>
+                  <Route
+                    path="riassegnazioni"
+                    element={
+                      <ManagerRoute>
+                        <RiassegnazioniStorico />
+                      </ManagerRoute>
+                    }
+                  />
                 </Route>
 
                 {/* Catch all - redirect to dashboard */}

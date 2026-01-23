@@ -11,7 +11,8 @@ import {
   LogOut,
   Menu,
   DollarSign,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Building2
 } from 'lucide-react';
 import { useAuthStore } from '../store';
 
@@ -27,6 +28,7 @@ const Layout = () => {
     { name: 'Task', href: '/tasks', icon: CheckSquare },
     { name: 'Attività', href: '/activities', icon: Layers },
     { name: 'Progetti', href: '/projects', icon: FolderOpen },
+    { name: 'Aree', href: '/areas', icon: Building2 },
     { name: 'Clienti', href: '/clients', icon: Users },
     { name: 'Calendario', href: '/calendar', icon: Calendar },
   ];
@@ -89,6 +91,12 @@ const Layout = () => {
                   >
                     <Icon className="mr-3 w-5 h-5" />
                     {item.name}
+                    {/* Badge NEW per Aree */}
+                    {item.name === 'Aree' && (
+                      <span className="ml-auto px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full font-medium">
+                        NEW
+                      </span>
+                    )}
                     {/* Badge NEW per Riassegnazioni */}
                     {item.name === 'Riassegnazioni' && (
                       <span className="ml-auto px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full font-medium">
@@ -153,6 +161,12 @@ const Layout = () => {
                     >
                       <Icon className="mr-4 w-6 h-6" />
                       {item.name}
+                      {/* Badge NEW per Aree nel mobile menu */}
+                      {item.name === 'Aree' && (
+                        <span className="ml-auto px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full font-medium">
+                          NEW
+                        </span>
+                      )}
                       {/* Badge NEW per Riassegnazioni nel mobile menu */}
                       {item.name === 'Riassegnazioni' && (
                         <span className="ml-auto px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full font-medium">

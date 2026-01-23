@@ -104,6 +104,8 @@ const CreateTaskForm = ({ activityId, activityName, onClose, onSuccess }) => {
   const [errors, setErrors] = useState({});
   
   const [users, setUsers] = useState([]);
+  const [aree, setAree] = useState([]);
+const [areeLoading, setAreeLoading] = useState(false);
 const [usersLoading, setUsersLoading] = useState(true);
 const { createTask, isCreating } = useTasks();
 
@@ -862,6 +864,7 @@ const CreateActivityForm = ({ projects, preselectedProject, onClose, onSuccess }
     nome: '',
     descrizione: '',
     progetto_id: preselectedProject?.id || '',
+    area_id: '', // ← AGGIUNGI QUESTO
     scadenza: '',
     risorse_assegnate: []
   });
@@ -869,6 +872,8 @@ const CreateActivityForm = ({ projects, preselectedProject, onClose, onSuccess }
   
   // ✅ NUOVO CODICE QUI
 const [users, setUsers] = useState([]);
+const [aree, setAree] = useState([]);
+const [areeLoading, setAreeLoading] = useState(false);
 const [usersLoading, setUsersLoading] = useState(true);
 const { createActivity, isCreating } = useActivities();
 

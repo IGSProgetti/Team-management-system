@@ -96,6 +96,7 @@ export const authAPI = {
 
 // Users API
 export const usersAPI = {
+  getAll: (params = {}) => api.get('/users', { params }), // ← AGGIUNGI
   getUsers: (params = {}) => 
     api.get('/users', { params }),
   
@@ -144,6 +145,7 @@ export const clientsAPI = {
 
 // Projects API
 export const projectsAPI = {
+  getAll: (params = {}) => api.get('/projects', { params }), // ← AGGIUNGI
   getProjects: (params = {}) => 
     api.get('/projects', { params }),
   
@@ -168,6 +170,7 @@ export const projectsAPI = {
 
 // Activities API
 export const activitiesAPI = {
+  getAll: (params = {}) => api.get('/activities', { params }), // ← AGGIUNGI
   getActivities: (params = {}) => 
     api.get('/activities', { params }),
   
