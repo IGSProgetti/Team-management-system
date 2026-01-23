@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, Edit2, X, Save } from 'lucide-react';
+import { Users, Plus, Trash2, ChevronRight, X, Save } from 'lucide-react';
 import api from '../utils/api';
+import ResourceDrillDownModal from './ResourceDrillDownModal';
 
-const ClientResourceAssignment = ({ clienteId, clienteBudget }) => {
+const ClientResourceAssignment = ({ clienteId, clienteBudget, clienteNome }) => {
   const [risorse, setRisorse] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
+  
+  // State per modal drill-down
+  const [selectedRisorsa, setSelectedRisorsa] = useState(null);
+  const [showDrillDownModal, setShowDrillDownModal] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -35,7 +39,6 @@ const ClientResourceAssignment = ({ clienteId, clienteBudget }) => {
     }
   });
 
-  // Carica risorse assegnate
   useEffect(() => {
     loadRisorse();
     loadAvailableUsers();
@@ -43,10 +46,12 @@ const ClientResourceAssignment = ({ clienteId, clienteBudget }) => {
 
   const loadRisorse = async () => {
     try {
+      setLoading(true);
       const response = await api.get(`/client-resources/${clienteId}`);
       setRisorse(response.data.risorse || []);
     } catch (error) {
       console.error('Errore caricamento risorse:', error);
+      setRisorse([]);
     } finally {
       setLoading(false);
     }
@@ -62,39 +67,38 @@ const ClientResourceAssignment = ({ clienteId, clienteBudget }) => {
   };
 
   // Calcola costo orario finale in tempo reale
-const calcolaCostoOrarioFinale = (costoBase, margini) => {
-  const base = parseFloat(costoBase);
-  
-  // Il totale è SEMPRE costo base × 5 (100/20 = 5)
-  const costoTotale = base * 5;
-  
-  const marginiConfig = [
-    { nome: 'costo_azienda', perc: margini.costo_azienda_perc, attivo: margini.costo_azienda_attivo },
-    { nome: 'utile_gestore_azienda', perc: margini.utile_gestore_azienda_perc, attivo: margini.utile_gestore_azienda_attivo },
-    { nome: 'utile_igs', perc: margini.utile_igs_perc, attivo: margini.utile_igs_attivo },
-    { nome: 'costi_professionista', perc: margini.costi_professionista_perc, attivo: margini.costi_professionista_attivo },
-    { nome: 'bonus_professionista', perc: margini.bonus_professionista_perc, attivo: margini.bonus_professionista_attivo },
-    { nome: 'gestore_societa', perc: margini.gestore_societa_perc, attivo: margini.gestore_societa_attivo },
-    { nome: 'commerciale', perc: margini.commerciale_perc, attivo: margini.commerciale_attivo },
-    { nome: 'centrale_igs', perc: margini.centrale_igs_perc, attivo: margini.centrale_igs_attivo },
-    { nome: 'network_igs', perc: margini.network_igs_perc, attivo: margini.network_igs_attivo }
-  ];
+  const calcolaCostoOrarioFinale = (costoBase, margini) => {
+    const base = parseFloat(costoBase);
+    
+    // Il totale è SEMPRE costo base × 5 (100/20 = 5)
+    const costoTotale = base * 5;
+    
+    const marginiConfig = [
+      { nome: 'costo_azienda', perc: margini.costo_azienda_perc, attivo: margini.costo_azienda_attivo },
+      { nome: 'utile_gestore_azienda', perc: margini.utile_gestore_azienda_perc, attivo: margini.utile_gestore_azienda_attivo },
+      { nome: 'utile_igs', perc: margini.utile_igs_perc, attivo: margini.utile_igs_attivo },
+      { nome: 'costi_professionista', perc: margini.costi_professionista_perc, attivo: margini.costi_professionista_attivo },
+      { nome: 'bonus_professionista', perc: margini.bonus_professionista_perc, attivo: margini.bonus_professionista_attivo },
+      { nome: 'gestore_societa', perc: margini.gestore_societa_perc, attivo: margini.gestore_societa_attivo },
+      { nome: 'commerciale', perc: margini.commerciale_perc, attivo: margini.commerciale_attivo },
+      { nome: 'centrale_igs', perc: margini.centrale_igs_perc, attivo: margini.centrale_igs_attivo },
+      { nome: 'network_igs', perc: margini.network_igs_perc, attivo: margini.network_igs_attivo }
+    ];
 
-  // Sottrai le percentuali NON attive dal totale
-  let costoFinale = costoTotale;
-  
-  marginiConfig.forEach(m => {
-    if (!m.attivo) {
-      // Se NON attivo, sottrai questa percentuale dal totale
-      const importoDaSottrarre = costoTotale * (parseFloat(m.perc || 0) / 100);
-      costoFinale -= importoDaSottrarre;
-    }
-  });
+    // Sottrai le percentuali NON attive dal totale
+    let costoFinale = costoTotale;
+    
+    marginiConfig.forEach(m => {
+      if (!m.attivo) {
+        // Se NON attivo, sottrai questa percentuale dal totale
+        const importoDaSottrarre = costoTotale * (parseFloat(m.perc || 0) / 100);
+        costoFinale -= importoDaSottrarre;
+      }
+    });
 
-  return costoFinale;
-};
+    return costoFinale;
+  };
 
-  // Gestione form
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -107,18 +111,6 @@ const calcolaCostoOrarioFinale = (costoBase, margini) => {
     } catch (error) {
       console.error('Errore assegnazione risorsa:', error);
       alert('Errore nell\'assegnazione della risorsa');
-    }
-  };
-
-  const handleDelete = async (risorsaId) => {
-    if (!window.confirm('Vuoi rimuovere questa risorsa dal cliente?')) return;
-    
-    try {
-      await api.delete(`/client-resources/${clienteId}/${risorsaId}`);
-      loadRisorse();
-    } catch (error) {
-      console.error('Errore rimozione risorsa:', error);
-      alert('Errore nella rimozione della risorsa');
     }
   };
 
@@ -149,249 +141,290 @@ const calcolaCostoOrarioFinale = (costoBase, margini) => {
     });
   };
 
-  // Calcoli in tempo reale
+  const handleDelete = async (risorsaId, e) => {
+    e.stopPropagation();
+    
+    if (!window.confirm('Vuoi rimuovere questa risorsa dal cliente?')) return;
+    
+    try {
+      await api.delete(`/client-resources/${clienteId}/${risorsaId}`);
+      loadRisorse();
+    } catch (error) {
+      console.error('Errore rimozione risorsa:', error);
+      alert('Errore nella rimozione della risorsa');
+    }
+  };
+
+  const handleRisorsaClick = (risorsa) => {
+    setSelectedRisorsa(risorsa);
+    setShowDrillDownModal(true);
+  };
+
+  // Ottieni risorsa selezionata per mostrare costo orario
   const selectedUser = availableUsers.find(u => u.id === formData.risorsa_id);
-const costoOrarioBase = parseFloat(selectedUser?.costo_orario || 0);
-  const costoOrarioFinale = calcolaCostoOrarioFinale(costoOrarioBase, formData.margini);
-  const budgetRisorsa = costoOrarioFinale * parseFloat(formData.ore_assegnate || 0);
-  const budgetTotale = risorse.reduce((sum, r) => sum + parseFloat(r.budget_risorsa || 0), 0);
+  const costoOrarioBase = selectedUser?.costo_orario || 0;
+  const costoOrarioFinale = selectedUser ? calcolaCostoOrarioFinale(costoOrarioBase, formData.margini) : 0;
+  const budgetRisorsa = formData.ore_assegnate ? parseFloat(formData.ore_assegnate) * costoOrarioFinale : 0;
 
   if (loading) {
-    return <div className="animate-pulse">Caricamento risorse...</div>;
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Users className="w-6 h-6 text-blue-600" />
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Risorse Assegnate</h3>
-            <p className="text-sm text-gray-500">
-              Budget totale: €{budgetTotale.toFixed(2)} / €{clienteBudget.toFixed(2)}
-            </p>
-          </div>
-        </div>
-        
-        {!showAddForm && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Aggiungi Risorsa
-          </button>
-        )}
-      </div>
-
-      {/* Form Aggiungi Risorsa */}
-      {showAddForm && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-gray-900">Nuova Assegnazione</h4>
-            <button
-              onClick={() => {
-                setShowAddForm(false);
-                resetForm();
-              }}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Selezione Risorsa */}
+    <>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Users className="w-6 h-6 text-blue-600" />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Risorsa *
-              </label>
-              <select
-                value={formData.risorsa_id}
-                onChange={(e) => setFormData({ ...formData, risorsa_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Seleziona risorsa...</option>
-                {availableUsers
-                  .filter(u => !risorse.find(r => r.risorsa_id === u.id))
-                  .map(user => (
+              <h2 className="text-xl font-bold text-gray-900">Risorse Assegnate al Cliente</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Click su una risorsa per vedere progetti, aree, attività e task
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg 
+                     hover:bg-blue-700 transition-colors"
+          >
+            {showAddForm ? (
+              <>
+                <X className="w-4 h-4 mr-2" />
+                Annulla
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Assegna Risorsa
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* FORM ASSEGNAZIONE RISORSA */}
+        {showAddForm && (
+          <form onSubmit={handleSubmit} className="mb-6 p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assegna Nuova Risorsa</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Seleziona Risorsa */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seleziona Risorsa *
+                </label>
+                <select
+                  value={formData.risorsa_id}
+                  onChange={(e) => setFormData({ ...formData, risorsa_id: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
+                           focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Seleziona una risorsa...</option>
+                  {availableUsers.map(user => (
                     <option key={user.id} value={user.id}>
-                      {user.nome} - €{user.costo_orario}/h
+                      {user.nome} - €{parseFloat(user.costo_orario || 0).toFixed(2)}/h
                     </option>
                   ))}
-              </select>
+                </select>
+              </div>
+
+              {/* Ore Assegnate */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ore Assegnate *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.ore_assegnate}
+                  onChange={(e) => setFormData({ ...formData, ore_assegnate: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
+                           focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Es: 100"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Ore Assegnate */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ore Assegnate *
-              </label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                value={formData.ore_assegnate}
-                onChange={(e) => setFormData({ ...formData, ore_assegnate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Es: 100"
-                required
-              />
-            </div>
-
-            {/* Margini */}
+            {/* MARGINI PERSONALIZZABILI */}
             {selectedUser && (
-              <div className="space-y-3">
-                <h5 className="font-medium text-gray-900">Margini Applicabili</h5>
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">Margini e Costi</h4>
                 
+                {/* Riepilogo Costi */}
+                <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded-lg">
+                  <div>
+                    <p className="text-sm text-gray-600">Costo Orario Base</p>
+                    <p className="text-lg font-bold text-gray-900">€{costoOrarioBase.toFixed(2)}/h</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Costo Orario Finale</p>
+                    <p className="text-lg font-bold text-blue-600">€{costoOrarioFinale.toFixed(2)}/h</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Budget Totale Risorsa</p>
+                    <p className="text-lg font-bold text-green-600">€{budgetRisorsa.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                {/* Checkbox Margini */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {[
-                    { key: 'costo_azienda', label: 'Costo Azienda', default: 25 },
-                    { key: 'utile_gestore_azienda', label: 'Utile Gestore Azienda', default: 12.5 },
-                    { key: 'utile_igs', label: 'Utile IGS', default: 12.5 },
-                    { key: 'costi_professionista', label: 'Costi Professionista', default: 20 },
-                    { key: 'bonus_professionista', label: 'Bonus Professionista', default: 5 },
-                    { key: 'gestore_societa', label: 'Gestore Società', default: 3 },
-                    { key: 'commerciale', label: 'Commerciale', default: 8 },
-                    { key: 'centrale_igs', label: 'Centrale IGS', default: 4 },
-                    { key: 'network_igs', label: 'Network IGS', default: 10 }
-                  ].map(margine => (
-                    <div key={margine.key} className="flex items-center gap-3 p-3 bg-white rounded border border-gray-200">
-                      <input
-                        type="checkbox"
-                        checked={formData.margini[`${margine.key}_attivo`]}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          margini: {
-                            ...formData.margini,
-                            [`${margine.key}_attivo`]: e.target.checked
-                          }
-                        })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex-1">
-                        <label className="text-sm font-medium text-gray-700">
-                          {margine.label}
-                        </label>
-                        <div className="flex items-center gap-2 mt-1">
+                    { key: 'costo_azienda', label: 'Costo Azienda', defaultPerc: 25 },
+                    { key: 'utile_gestore_azienda', label: 'Utile Gestore Azienda', defaultPerc: 12.5 },
+                    { key: 'utile_igs', label: 'Utile IGS', defaultPerc: 12.5 },
+                    { key: 'costi_professionista', label: 'Costi Professionista', defaultPerc: 20 },
+                    { key: 'bonus_professionista', label: 'Bonus Professionista', defaultPerc: 5 },
+                    { key: 'gestore_societa', label: 'Gestore Società', defaultPerc: 3 },
+                    { key: 'commerciale', label: 'Commerciale', defaultPerc: 8 },
+                    { key: 'centrale_igs', label: 'Centrale IGS', defaultPerc: 4 },
+                    { key: 'network_igs', label: 'Network IGS', defaultPerc: 10 }
+                  ].map(margine => {
+                    const isActive = formData.margini[`${margine.key}_attivo`];
+                    const perc = formData.margini[`${margine.key}_perc`];
+                    const importo = (costoOrarioBase * 5 * perc / 100).toFixed(2);
+                    
+                    return (
+                      <div key={margine.key} className="flex items-center justify-between p-3 bg-white rounded border border-gray-200">
+                        <div className="flex items-center gap-3">
                           <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={formData.margini[`${margine.key}_perc`]}
+                            type="checkbox"
+                            checked={isActive}
                             onChange={(e) => setFormData({
                               ...formData,
                               margini: {
                                 ...formData.margini,
-                                [`${margine.key}_perc`]: parseFloat(e.target.value) || 0
+                                [`${margine.key}_attivo`]: e.target.checked
                               }
                             })}
-                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
-                            disabled={!formData.margini[`${margine.key}_attivo`]}
+                            className="w-4 h-4 text-blue-600"
                           />
-                          <span className="text-sm text-gray-500">%</span>
-                          {formData.margini[`${margine.key}_attivo`] && (
-  <span className="text-sm text-blue-600 font-medium">
-    +€{(parseFloat(costoOrarioBase) * formData.margini[`${margine.key}_perc`] / 100).toFixed(2)}
-  </span>
-)}
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{margine.label}</p>
+                            <p className="text-xs text-gray-500">{perc}% = €{importo}/h</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Riepilogo Calcoli */}
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Costo Orario Base:</span>
-                      <span className="ml-2 font-semibold">€{costoOrarioBase.toFixed(2)}/h</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Costo Orario Finale:</span>
-                      <span className="ml-2 font-semibold text-blue-600">€{costoOrarioFinale.toFixed(2)}/h</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Ore Assegnate:</span>
-                      <span className="ml-2 font-semibold">{formData.ore_assegnate || 0}h</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Budget Risorsa:</span>
-                      <span className="ml-2 font-semibold text-green-600">€{budgetRisorsa.toFixed(2)}</span>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Buttons */}
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                disabled={!selectedUser || !formData.ore_assegnate}
-              >
-                Assegna Risorsa
-              </button>
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setShowAddForm(false);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg 
+                         hover:bg-gray-50 transition-colors"
               >
                 Annulla
               </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+                         transition-colors flex items-center justify-center"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Assegna Risorsa
+              </button>
             </div>
           </form>
-        </div>
-      )}
+        )}
 
-      {/* Lista Risorse Assegnate */}
-      {risorse.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>Nessuna risorsa assegnata a questo cliente</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {risorse.map(risorsa => (
-            <div
-              key={risorsa.id}
-              className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
-            >
-              <div className="flex-1">
-                <h4 className="font-semibold text-gray-900">{risorsa.risorsa_nome}</h4>
-                <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                  <span>Ore: {risorsa.ore_assegnate}h</span>
-                  <span>Base: €{parseFloat(risorsa.costo_orario_base).toFixed(2)}/h</span>
-                  <span className="text-blue-600 font-medium">
-                    Finale: €{parseFloat(risorsa.costo_orario_finale).toFixed(2)}/h
-                  </span>
-                  <span className="text-green-600 font-semibold">
-                    Budget: €{parseFloat(risorsa.budget_risorsa).toFixed(2)}
-                  </span>
+        {/* LISTA RISORSE */}
+        {risorse.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p>Nessuna risorsa assegnata a questo cliente</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {risorse.map(risorsa => (
+              <div
+                key={risorsa.id}
+                onClick={() => handleRisorsaClick(risorsa)}
+                className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-blue-50 
+                         rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md 
+                         transition-all cursor-pointer group"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {risorsa.risorsa_nome}
+                    </h4>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                      Risorsa
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <span className="font-medium text-gray-700">Ore:</span>
+                      {risorsa.ore_assegnate}h
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="font-medium text-gray-700">Base:</span>
+                      €{parseFloat(risorsa.costo_orario_base).toFixed(2)}/h
+                    </span>
+                    <span className="flex items-center gap-1 text-blue-600 font-medium">
+                      <span className="font-semibold text-gray-700">Finale:</span>
+                      €{parseFloat(risorsa.costo_orario_finale).toFixed(2)}/h
+                    </span>
+                    <span className="flex items-center gap-1 text-green-600 font-semibold">
+                      <span className="font-semibold text-gray-700">Budget:</span>
+                      €{parseFloat(risorsa.budget_risorsa).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => handleDelete(risorsa.risorsa_id, e)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Rimuovi risorsa"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  
+                  <div className="flex items-center gap-2 pl-4 border-l border-gray-300">
+                    <span className="text-sm text-gray-500 group-hover:text-blue-600 transition-colors">
+                      Vedi progetti
+                    </span>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleDelete(risorsa.risorsa_id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Rimuovi risorsa"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal Drill-Down */}
+      <ResourceDrillDownModal
+        isOpen={showDrillDownModal}
+        onClose={() => {
+          setShowDrillDownModal(false);
+          setSelectedRisorsa(null);
+        }}
+        risorsa={selectedRisorsa}
+        clienteId={clienteId}
+        clienteNome={clienteNome}
+      />
+    </>
   );
 };
 
