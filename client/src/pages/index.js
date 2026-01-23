@@ -17,6 +17,8 @@ export { default as ClientsPage } from './Clients/ClientsPage';
 // DOPO (componente completo)
 export { default as CalendarPage } from './Calendar/CalendarPage';
 
+export { default as ClientDetail } from './Clients/ClientDetail';
+
 export const ProfilePage = () => (
   <div>
     <h1 className="text-2xl font-bold mb-6">Profilo Utente</h1>

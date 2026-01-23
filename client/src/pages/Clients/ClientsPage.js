@@ -12,6 +12,7 @@ import {
   Filter
 } from 'lucide-react';
 import { useAuth } from '../../hooks';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 
 // Utils
@@ -57,13 +58,18 @@ const getStatusBadge = (stato) => {
 
 // Component ClientCard
 const ClientCard = ({ client }) => {
-  const budgetUtilizzato = (client.budget_progetti_assegnato || 0);
-  const budgetDisponibile = (client.budget || 0) - budgetUtilizzato;
-  const percentualeUtilizzo = client.budget > 0 ? (budgetUtilizzato / client.budget) * 100 : 0;
+  const navigate = useNavigate();
+  
+  const budgetTotale = parseFloat(client.budget || 0);
+  const budgetRisorseAssegnato = parseFloat(client.budget_risorse_assegnato || 0);
+  const budgetDisponibile = budgetTotale - budgetRisorseAssegnato;
+  const percentualeUtilizzo = budgetTotale > 0 ? (budgetRisorseAssegnato / budgetTotale) * 100 : 0;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 
-                    hover:border-gray-300 group cursor-pointer">
+    <div 
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={() => navigate(`/clients/${client.id}`)}
+    >
       
       {/* Header con nome e status */}
       <div className="flex items-start justify-between mb-4">
@@ -88,36 +94,49 @@ const ClientCard = ({ client }) => {
         </p>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="text-center p-3 bg-blue-50 rounded-lg">
+      {/* Stats Grid - 3 colonne */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {/* Budget Totale */}
+        <div className="text-center p-3 bg-purple-50 rounded-lg">
           <div className="flex items-center justify-center mb-1">
-            <DollarSign className="w-4 h-4 text-blue-600 mr-1" />
-            <span className="text-sm text-blue-600">Budget</span>
+            <DollarSign className="w-4 h-4 text-purple-600 mr-1" />
+            <span className="text-xs text-purple-600">Totale</span>
           </div>
-          <div className="font-semibold text-blue-900">
-            {formatCurrency(client.budget)}
+          <div className="font-semibold text-sm text-purple-900">
+            {formatCurrency(budgetTotale)}
           </div>
         </div>
         
+        {/* Budget Assegnato */}
+        <div className="text-center p-3 bg-blue-50 rounded-lg">
+          <div className="flex items-center justify-center mb-1">
+            <Users className="w-4 h-4 text-blue-600 mr-1" />
+            <span className="text-xs text-blue-600">Assegnato</span>
+          </div>
+          <div className="font-semibold text-sm text-blue-900">
+            {formatCurrency(budgetRisorseAssegnato)}
+          </div>
+        </div>
+
+        {/* Budget Disponibile */}
         <div className="text-center p-3 bg-green-50 rounded-lg">
           <div className="flex items-center justify-center mb-1">
-            <Building2 className="w-4 h-4 text-green-600 mr-1" />
-            <span className="text-sm text-green-600">Progetti</span>
+            <CheckCircle className="w-4 h-4 text-green-600 mr-1" />
+            <span className="text-xs text-green-600">Disponibile</span>
           </div>
-          <div className="font-semibold text-green-900">
-            {client.numero_progetti || 0}
+          <div className="font-semibold text-sm text-green-900">
+            {formatCurrency(budgetDisponibile)}
           </div>
         </div>
       </div>
 
       {/* Budget Progress Bar */}
-      {client.budget > 0 && (
+      {budgetTotale > 0 && (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Budget Utilizzato</span>
-            <span className="text-sm font-medium text-gray-900">
-              {formatCurrency(budgetUtilizzato)} / {formatCurrency(client.budget)}
+            <span className="text-xs text-gray-600">Utilizzo Budget Risorse</span>
+            <span className="text-xs font-medium text-gray-900">
+              {percentualeUtilizzo.toFixed(1)}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -128,14 +147,6 @@ const ClientCard = ({ client }) => {
               }`}
               style={{ width: `${Math.min(percentualeUtilizzo, 100)}%` }}
             />
-          </div>
-          <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
-            <span>{percentualeUtilizzo.toFixed(0)}% utilizzato</span>
-            <span>
-              {budgetDisponibile >= 0 ? 
-                `${formatCurrency(budgetDisponibile)} disponibile` : 
-                `${formatCurrency(Math.abs(budgetDisponibile))} in eccesso`}
-            </span>
           </div>
         </div>
       )}

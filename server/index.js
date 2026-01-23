@@ -22,6 +22,7 @@ const areeRoutes = require('./routes/aree');
 const marginiRoutes = require('./routes/margini');
 const bonusRoutes = require('./routes/bonus');
 const performanceRoutes = require('./routes/performance');
+const clientResourcesRoutes = require('./routes/client-resources');
 
 
 
@@ -67,6 +68,7 @@ app.use('/api/performance', performanceRoutes);
 app.use('/api/aree', areeRoutes);
 app.use('/api/margini', marginiRoutes);
 app.use('/api/bonus', bonusRoutes);
+app.use('/api/client-resources', clientResourcesRoutes);
 
 // Health check
 app.get('/api/health', async (req, res) => {

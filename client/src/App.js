@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, useUIStore } from './store';
 
 import LoginPage from './pages/Auth/LoginPage';
-import { RegisterPage, ActivitiesPage, ProjectsPage, ClientsPage, CalendarPage, ProfilePage, UsersPage } from './pages';
+import { RegisterPage, ActivitiesPage, ProjectsPage, ClientsPage, ClientDetail, CalendarPage, ProfilePage, UsersPage } from './pages';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import TasksPage from './pages/Tasks/TasksPage';
 import BudgetControlPage from './pages/Manager/BudgetControlPage';
@@ -208,6 +208,7 @@ function App() {
                   {/* Projects & Clients */}
                   <Route path="projects" element={<ProjectsPage />} />
                   <Route path="clients" element={<ClientsPage />} />
+                  <Route path="clients/:id" element={<ClientDetail />} />
 
                   {/* Calendar */}
                   <Route path="calendar" element={<CalendarPage />} />

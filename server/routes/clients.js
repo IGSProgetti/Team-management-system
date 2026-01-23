@@ -29,8 +29,8 @@ router.get('/', bypassAuth, validatePagination, async (req, res) => {
       whereClause += ' AND (stato_approvazione = $1 OR creato_da = $2)';
       params.push('approvata', req.user.id);
     } else if (stato_approvazione) {
-  whereClause += ' AND c.stato_approvazione = $' + (params.length + 1);
-  params.push(stato_approvazione);
+      whereClause += ' AND c.stato_approvazione = $' + (params.length + 1);
+      params.push(stato_approvazione);
     }
 
     const countResult = await query(`SELECT COUNT(*) FROM clienti ${whereClause}`, params);
@@ -38,18 +38,34 @@ router.get('/', bypassAuth, validatePagination, async (req, res) => {
 
     const result = await query(`
       SELECT 
-        c.id, c.nome, c.descrizione, c.budget, c.budget_utilizzato,
-        c.stato_approvazione, c.data_creazione, c.data_aggiornamento,
+        c.id,
+        c.nome,
+        c.descrizione,
+        c.budget,
+        c.budget_utilizzato,
+        c.stato_approvazione,
+        c.creato_da,
+        c.data_creazione,
+        c.data_aggiornamento,
+        c.approvato_da,
+        c.data_approvazione,
+        c.attivo,
         u.nome as creato_da_nome,
-        -- Conteggio progetti
-        COUNT(p.id) as numero_progetti,
-        COALESCE(SUM(p.budget_assegnato), 0) as budget_progetti_assegnato
+        COUNT(DISTINCT p.id) as numero_progetti,
+        COALESCE(SUM(DISTINCT p.budget_assegnato), 0) as budget_progetti_assegnato,
+        -- Budget risorse (sottoquery per evitare duplicati)
+        COALESCE((
+          SELECT SUM(budget_risorsa) 
+          FROM assegnazione_cliente_risorsa 
+          WHERE cliente_id = c.id
+        ), 0) as budget_risorse_assegnato
       FROM clienti c
       LEFT JOIN utenti u ON c.creato_da = u.id
-      LEFT JOIN progetti p ON c.id = p.cliente_id
+      LEFT JOIN progetti p ON p.cliente_id = c.id
       ${whereClause}
-      GROUP BY c.id, c.nome, c.descrizione, c.budget, c.budget_utilizzato,
-               c.stato_approvazione, c.data_creazione, c.data_aggiornamento, u.nome
+      GROUP BY c.id, c.nome, c.descrizione, c.budget, c.budget_utilizzato, 
+               c.stato_approvazione, c.creato_da, c.data_creazione, c.data_aggiornamento,
+               c.approvato_da, c.data_approvazione, c.attivo, u.nome
       ORDER BY ${sort === 'nome' ? 'c.nome' : 'c.' + sort} ${order.toUpperCase()}
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `, [...params, limit, offset]);
@@ -113,15 +129,26 @@ RETURNING *
 router.get('/:id', bypassAuth, validateUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
-
+    
     const result = await query(`
       SELECT 
         c.id, c.nome, c.descrizione, c.budget, c.budget_utilizzato,
         c.stato_approvazione, c.data_creazione, c.data_aggiornamento,
         u.nome as creato_da_nome,
-        -- Budget info
-        COALESCE(SUM(p.budget_assegnato), 0) as budget_progetti_assegnato,
-        c.budget - COALESCE(SUM(p.budget_assegnato), 0) as budget_residuo
+        -- Budget progetti
+        COALESCE(SUM(DISTINCT p.budget_assegnato), 0) as budget_progetti_assegnato,
+        -- Budget risorse (sottoquery per evitare duplicati)
+        COALESCE((
+          SELECT SUM(budget_risorsa) 
+          FROM assegnazione_cliente_risorsa 
+          WHERE cliente_id = c.id
+        ), 0) as budget_risorse_assegnato,
+        -- Budget residuo
+        c.budget - COALESCE((
+          SELECT SUM(budget_risorsa) 
+          FROM assegnazione_cliente_risorsa 
+          WHERE cliente_id = c.id
+        ), 0) as budget_residuo
       FROM clienti c
       LEFT JOIN utenti u ON c.creato_da = u.id
       LEFT JOIN progetti p ON c.id = p.cliente_id
@@ -138,11 +165,11 @@ router.get('/:id', bypassAuth, validateUUID('id'), async (req, res) => {
     }
 
     const client = result.rows[0];
-
+    
     res.json({
       client: client
     });
-
+    
   } catch (error) {
     console.error('Get client details error:', error);
     res.status(500).json({
