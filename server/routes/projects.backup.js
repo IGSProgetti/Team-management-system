@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /api/projects - Lista progetti
 router.get('/', authenticateToken, validatePagination, async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'nome', order = 'asc', cliente_id, stato_approvazione } = req.query;
+    const { page = 1, limit = 20, sort = 'nome', order = 'asc', cliente_id, stato_approvazione, risorsa_id } = req.query;
     const offset = (page - 1) * limit;
 
     let whereClause = 'WHERE 1=1';
@@ -30,51 +30,69 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
       params.push(cliente_id);
     }
 
+    // 🆕 FILTRO RISORSA: Mostra solo progetti dove la risorsa ha almeno 1 task
+    if (risorsa_id) {
+      whereClause += ` AND EXISTS (
+        SELECT 1 FROM aree ar2
+        JOIN attivita att2 ON att2.area_id = ar2.id
+        JOIN task t2 ON t2.attivita_id = att2.id
+        WHERE ar2.progetto_id = p.id 
+        AND t2.utente_assegnato = $${params.length + 1}
+      )`;
+      params.push(risorsa_id);
+    }
+
     const result = await query(`
-  SELECT 
-    p.id, 
-    p.nome, 
-    p.descrizione, 
-    p.budget_assegnato, 
-    p.budget_utilizzato,
-    p.stato_approvazione, 
-    p.data_inizio, 
-    p.data_fine, 
-    p.data_creazione,
-    c.nome as cliente_nome, 
-    c.id as cliente_id,
-    u.nome as creato_da_nome,
-    
-    -- Risorse
-    COUNT(DISTINCT ap.utente_id) as numero_risorse,
-    COALESCE(SUM(ap.ore_assegnate), 0) as ore_totali_assegnate,
-    
-    -- 💰 BUDGET EFFETTIVO PROGETTO = Somma budget_effettivo di tutte le task completate
-    COALESCE(ROUND(SUM(
-      CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
-      THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, ut.costo_orario, 0)
-      ELSE 0 END
-    ), 2), 0) as budget_effettivo,
-    
-    -- Ore utilizzate (da task completate)
-    COALESCE(SUM(CASE WHEN t.stato = 'completata' THEN t.ore_effettive ELSE 0 END), 0) as ore_totali_utilizzate
-    
-  FROM progetti p
-  JOIN clienti c ON p.cliente_id = c.id
-  LEFT JOIN utenti u ON p.creato_da = u.id
-  LEFT JOIN assegnazioni_progetto ap ON p.id = ap.progetto_id
-  LEFT JOIN aree ar ON ar.progetto_id = p.id
-  LEFT JOIN attivita att ON att.area_id = ar.id
-  LEFT JOIN task t ON t.attivita_id = att.id
-  LEFT JOIN utenti ut ON t.utente_assegnato = ut.id
-  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
-  ${whereClause}
-  GROUP BY p.id, p.nome, p.descrizione, p.budget_assegnato, p.budget_utilizzato,
-           p.stato_approvazione, p.data_inizio, p.data_fine, p.data_creazione,
-           c.nome, c.id, u.nome
-  ORDER BY ${sort === 'cliente_nome' ? 'c.nome' : sort === 'nome' ? 'p.nome' : 'p.' + sort} ${order.toUpperCase()}
-  LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-`, [...params, limit, offset]);
+      SELECT 
+        p.id, 
+        p.nome, 
+        p.descrizione, 
+        p.budget_assegnato, 
+        p.budget_utilizzato,
+        p.stato_approvazione, 
+        p.data_inizio, 
+        p.data_fine, 
+        p.data_creazione,
+        c.nome as cliente_nome, 
+        c.id as cliente_id,
+        u.nome as creato_da_nome,
+        
+        -- Risorse
+        COUNT(DISTINCT ap.utente_id) as numero_risorse,
+        COALESCE(SUM(ap.ore_assegnate), 0) as ore_totali_assegnate,
+        
+        -- 💰 BUDGET EFFETTIVO - Filtrato per risorsa se risorsa_id è presente
+        COALESCE(ROUND(SUM(
+          CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
+            ${risorsa_id ? `AND t.utente_assegnato = $${params.indexOf(risorsa_id) + 1}` : ''}
+          THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, ut.costo_orario, 0)
+          ELSE 0 END
+        ), 2), 0) as budget_effettivo,
+        
+        -- Ore utilizzate - Filtrato per risorsa se risorsa_id è presente
+        COALESCE(SUM(
+          CASE WHEN t.stato = 'completata'
+            ${risorsa_id ? `AND t.utente_assegnato = $${params.indexOf(risorsa_id) + 1}` : ''}
+          THEN t.ore_effettive 
+          ELSE 0 END
+        ), 0) as ore_totali_utilizzate
+        
+      FROM progetti p
+      JOIN clienti c ON p.cliente_id = c.id
+      LEFT JOIN utenti u ON p.creato_da = u.id
+      LEFT JOIN assegnazioni_progetto ap ON p.id = ap.progetto_id
+      LEFT JOIN aree ar ON ar.progetto_id = p.id
+      LEFT JOIN attivita att ON att.area_id = ar.id
+      LEFT JOIN task t ON t.attivita_id = att.id
+      LEFT JOIN utenti ut ON t.utente_assegnato = ut.id
+      LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
+      ${whereClause}
+      GROUP BY p.id, p.nome, p.descrizione, p.budget_assegnato, p.budget_utilizzato,
+               p.stato_approvazione, p.data_inizio, p.data_fine, p.data_creazione,
+               c.nome, c.id, u.nome
+      ORDER BY ${sort === 'cliente_nome' ? 'c.nome' : sort === 'nome' ? 'p.nome' : 'p.' + sort} ${order.toUpperCase()}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, [...params, limit, offset]);
 
     res.json({ projects: result.rows });
 

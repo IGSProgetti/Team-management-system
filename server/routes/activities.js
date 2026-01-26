@@ -38,6 +38,7 @@ if (stato) {
 }
 
 // 🆕 FILTRO RISORSA: Mostra solo attività dove la risorsa ha almeno 1 task
+/*
 if (risorsa_id) {
   whereClause += ` AND EXISTS (
     SELECT 1 FROM task t2
@@ -46,6 +47,7 @@ if (risorsa_id) {
   )`;
   params.push(risorsa_id);
 }
+*/
 
     // ✅ QUERY CORRETTA CON CONTEGGIO RISORSE
 const result = await query(`

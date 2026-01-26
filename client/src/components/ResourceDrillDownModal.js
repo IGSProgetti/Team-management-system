@@ -458,18 +458,40 @@ const ResourceDrillDownModal = ({
   // ============================================
   
   const loadProgetti = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/projects?cliente_id=${clienteId}&risorsa_id=${risorsa.risorsa_id}`);
-      const allProjects = response.data.projects || [];
-      setProgetti(allProjects);
-    } catch (error) {
-      console.error('Errore caricamento progetti:', error);
-      setProgetti([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  console.log('🚀 loadProgetti chiamato!');
+  console.log('📊 Dati disponibili:', { 
+    clienteId, 
+    risorsaId: risorsa?.risorsa_id,
+    risorsaNome: risorsa?.risorsa_nome,
+    risorsa: risorsa
+  });
+  
+  // ⚠️ CONTROLLO: Se mancano i dati, non fare la chiamata
+  if (!clienteId || !risorsa?.risorsa_id) {
+    console.error('❌ Dati mancanti! clienteId o risorsa_id non disponibili');
+    return;
+  }
+  
+  try {
+    setLoading(true);
+    const url = `/projects?cliente_id=${clienteId}&risorsa_id=${risorsa.risorsa_id}`;
+    console.log('📞 Chiamata API:', url);
+    
+    const response = await api.get(url);
+    
+    console.log('✅ Risposta API ricevuta:', response.data);
+    
+    const allProjects = response.data.projects || [];
+    console.log(`📦 Progetti caricati: ${allProjects.length}`);
+    
+    setProgetti(allProjects);
+  } catch (error) {
+    console.error('❌ Errore caricamento progetti:', error);
+    setProgetti([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadAree = async (progettoId) => {
     try {

@@ -29,15 +29,17 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     // 🆕 FILTRO RISORSA
-    if (risorsa_id) {
-      whereClause += ` AND EXISTS (
-        SELECT 1 FROM attivita att2
-        JOIN task t2 ON t2.attivita_id = att2.id
-        WHERE att2.area_id = a.id 
-        AND t2.utente_assegnato = $${params.length + 1}
-      )`;
-      params.push(risorsa_id);
-    }
+    /*
+if (risorsa_id) {
+  whereClause += ` AND EXISTS (
+    SELECT 1 FROM attivita att2
+    JOIN task t2 ON t2.attivita_id = att2.id
+    WHERE att2.area_id = a.id 
+    AND t2.utente_assegnato = $${params.length + 1}
+  )`;
+  params.push(risorsa_id);
+}
+*/
 
     // Filtro per coordinatore
     if (coordinatore_id) {
