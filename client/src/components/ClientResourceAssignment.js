@@ -161,10 +161,10 @@ const ClientResourceAssignment = ({ clienteId, clienteBudget, clienteNome }) => 
   };
 
   // Ottieni risorsa selezionata per mostrare costo orario
-  const selectedUser = availableUsers.find(u => u.id === formData.risorsa_id);
-  const costoOrarioBase = selectedUser?.costo_orario || 0;
-  const costoOrarioFinale = selectedUser ? calcolaCostoOrarioFinale(costoOrarioBase, formData.margini) : 0;
-  const budgetRisorsa = formData.ore_assegnate ? parseFloat(formData.ore_assegnate) * costoOrarioFinale : 0;
+const selectedUser = availableUsers.find(u => u.id === formData.risorsa_id);
+const costoOrarioBase = parseFloat(selectedUser?.costo_orario || 0);
+const costoOrarioFinale = selectedUser ? calcolaCostoOrarioFinale(costoOrarioBase, formData.margini) : 0;
+const budgetRisorsa = formData.ore_assegnate ? parseFloat(formData.ore_assegnate) * costoOrarioFinale : 0;
 
   if (loading) {
     return (

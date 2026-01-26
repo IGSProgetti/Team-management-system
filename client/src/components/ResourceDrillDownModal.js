@@ -13,6 +13,10 @@ import {
   User
 } from 'lucide-react';
 import api from '../utils/api';
+import CreateAreaModal from './CreateAreaModal';
+import CreateActivityModal from './CreateActivityModal';
+import CreateTaskModal from './CreateTaskModal';
+import CreateProjectModal from './CreateProjectModal';
 
 // ============================================
 // COMPONENTE: Breadcrumb Interno
@@ -240,6 +244,12 @@ const ResourceDrillDownModal = ({
   // Tab attivo
   const [activeTab, setActiveTab] = useState('progetti');
 
+  // State per modal
+  const [showCreateAreaModal, setShowCreateAreaModal] = useState(false);
+  const [showCreateActivityModal, setShowCreateActivityModal] = useState(false);
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+
   // Reset quando si apre/chiude
   useEffect(() => {
     if (isOpen) {
@@ -284,28 +294,75 @@ const ResourceDrillDownModal = ({
   };
 
   const loadAttivita = async (areaId) => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/activities?area_id=${areaId}`);
-      setAttivita(response.data.attivita || response.data.activities || []);
-    } catch (error) {
-      console.error('Errore caricamento attività:', error);
-      setAttivita([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  console.log('🔍 Caricamento attività per area:', areaId);
+  
+  try {
+    setLoading(true);
+    const response = await api.get(`/activities?area_id=${areaId}`); // <-- PARENTESI TONDA (
+    
+    console.log('🔍 Risposta API:', response.data);
+    
+    const attivitaList = response.data.attivita || response.data.activities || [];
+    
+    console.log('🔍 Numero attività ricevute:', attivitaList.length);
+    
+    setAttivita(attivitaList);
+  } catch (error) {
+    console.error('Errore caricamento attività:', error);
+    setAttivita([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadTasks = async (attivitaId) => {
+    
     try {
       setLoading(true);
       const response = await api.get(`/tasks?attivita_id=${attivitaId}`);
-      setTasks(response.data.tasks || []);
+      const tutteLeTasks = response.data.tasks || [];
+
+      console.log('🔍 TUTTE le task dell\'attività:', tutteLeTasks);
+      console.log('🔍 Risorsa ID da filtrare:', risorsa.risorsa_id);
+      
+      // Filtra solo le task assegnate a questa risorsa
+      const taskFiltrate = tutteLeTasks.filter(task => 
+        task.utente_assegnato === risorsa.risorsa_id
+      );
+      
+      console.log('Task filtrate per risorsa:', taskFiltrate);
+      setTasks(taskFiltrate);
     } catch (error) {
       console.error('Errore caricamento task:', error);
       setTasks([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateProjectSuccess = (newProject) => {
+    console.log('Progetto creato con successo:', newProject);
+    loadProgetti();
+  };
+
+  const handleCreateAreaSuccess = (newArea) => {
+    console.log('Area creata con successo:', newArea);
+    if (selectedProject) {
+      loadAree(selectedProject.id);
+    }
+  };
+
+  const handleCreateActivitySuccess = (newActivity) => {
+    console.log('Attività creata con successo:', newActivity);
+    if (selectedArea) {
+      loadAttivita(selectedArea.id);
+    }
+  };
+
+  const handleCreateTaskSuccess = (newTask) => {
+    console.log('Task creata con successo:', newTask);
+    if (selectedActivity) {
+      loadTasks(selectedActivity.id);
     }
   };
 
@@ -320,16 +377,20 @@ const ResourceDrillDownModal = ({
   };
 
   const handleAreaClick = (area) => {
-    setSelectedArea(area);
-    setCurrentLevel('attivita');
-    loadAttivita(area.id);
-  };
+  console.log('🔍 Area selezionata:', area);
+  setSelectedArea(area);
+  setCurrentLevel('attivita');
+  console.log('🔍 Current level impostato a: attivita'); // <-- AGGIUNGI
+  loadAttivita(area.id);
+};
 
   const handleActivityClick = (activity) => {
-    setSelectedActivity(activity);
-    setCurrentLevel('task');
-    loadTasks(activity.id);
-  };
+  console.log('🔍 Attività cliccata:', activity); // <-- AGGIUNGI
+  setSelectedActivity(activity);
+  setCurrentLevel('task');
+  loadTasks(activity.id);
+  console.log('🔍 loadTasks chiamata con ID:', activity.id); // <-- AGGIUNGI
+};
 
   const handleNavigateBack = (level) => {
     setCurrentLevel(level);
@@ -374,260 +435,315 @@ const ResourceDrillDownModal = ({
 
   if (!isOpen) return null;
 
+  console.log('🔍 Rendering - Current Level:', currentLevel); // <-- AGGIUNGI
+  console.log('🔍 Rendering - Selected Area:', selectedArea); // <-- AGGIUNGI
+
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white rounded-lg shadow-sm">
-              <User className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{risorsa?.risorsa_nome}</h2>
-              <p className="text-sm text-gray-600 mt-1">Cliente: {clienteNome}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6 text-gray-500" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 px-6 pt-4 border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('progetti')}
-            className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
-              activeTab === 'progetti'
-                ? 'bg-white text-blue-600 border-t-2 border-x-2 border-blue-600 -mb-px'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Progetti
-          </button>
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
-              activeTab === 'info'
-                ? 'bg-white text-blue-600 border-t-2 border-x-2 border-blue-600 -mb-px'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Info Risorsa
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'progetti' ? (
-            <>
-              {/* Breadcrumb */}
-              {currentLevel !== 'progetti' && (
-                <Breadcrumb 
-                  items={getBreadcrumbItems()} 
-                  onNavigate={handleNavigateBack}
-                />
-              )}
-
-              {/* Loading */}
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <>
-                  {/* LIVELLO: PROGETTI */}
-                  {currentLevel === 'progetti' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          Progetti di {risorsa?.risorsa_nome}
-                        </h3>
-                        <button
-                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg 
-                                   hover:bg-blue-700 transition-colors"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Nuovo Progetto
-                        </button>
-                      </div>
-
-                      {progetti.length === 0 ? (
-                        <EmptyState
-                          icon={FolderOpen}
-                          title="Nessun progetto"
-                          description="Questa risorsa non ha progetti assegnati per questo cliente"
-                          buttonText="Crea Primo Progetto"
-                        />
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {progetti.map(progetto => (
-                            <ProjectCard
-                              key={progetto.id}
-                              project={progetto}
-                              onClick={() => handleProjectClick(progetto)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* LIVELLO: AREE */}
-                  {currentLevel === 'aree' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          Aree di {risorsa?.risorsa_nome} in {selectedProject?.nome}
-                        </h3>
-                        <button
-                          className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg 
-                                   hover:bg-purple-700 transition-colors"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Nuova Area
-                        </button>
-                      </div>
-
-                      {aree.length === 0 ? (
-                        <EmptyState
-                          icon={Building2}
-                          title="Nessuna area"
-                          description="Questa risorsa non ha aree assegnate in questo progetto"
-                          buttonText="Crea Prima Area"
-                        />
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {aree.map(area => (
-                            <AreaCard
-                              key={area.id}
-                              area={area}
-                              onClick={() => handleAreaClick(area)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* LIVELLO: ATTIVITÀ */}
-                  {currentLevel === 'attivita' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          Attività di {risorsa?.risorsa_nome} in {selectedArea?.nome}
-                        </h3>
-                        <button
-                          className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg 
-                                   hover:bg-green-700 transition-colors"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Nuova Attività
-                        </button>
-                      </div>
-
-                      {attivita.length === 0 ? (
-                        <EmptyState
-                          icon={Layers}
-                          title="Nessuna attività"
-                          description="Questa risorsa non ha attività assegnate in quest'area"
-                          buttonText="Crea Prima Attività"
-                        />
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {attivita.map(activity => (
-                            <ActivityCard
-                              key={activity.id}
-                              activity={activity}
-                              onClick={() => handleActivityClick(activity)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* LIVELLO: TASK */}
-                  {currentLevel === 'task' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          Task di {risorsa?.risorsa_nome} in {selectedActivity?.nome}
-                        </h3>
-                        <button
-                          className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg 
-                                   hover:bg-orange-700 transition-colors"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Nuova Task
-                        </button>
-                      </div>
-
-                      {tasks.length === 0 ? (
-                        <EmptyState
-                          icon={CheckSquare}
-                          title="Nessuna task"
-                          description="Questa risorsa non ha task assegnate in questa attività"
-                          buttonText="Crea Prima Task"
-                        />
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {tasks.map(task => (
-                            <TaskCard key={task.id} task={task} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          ) : (
-            /* TAB INFO RISORSA */
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-gray-900">Informazioni Risorsa</h3>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-500">Nome</p>
-                  <p className="font-semibold text-gray-900">{risorsa?.risorsa_nome}</p>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-500">Ore Assegnate</p>
-                  <p className="font-semibold text-gray-900">{risorsa?.ore_assegnate}h</p>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-500">Costo Orario Base</p>
-                  <p className="font-semibold text-gray-900">
-                    €{parseFloat(risorsa?.costo_orario_base || 0).toFixed(2)}/h
-                  </p>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-500">Costo Orario Finale</p>
-                  <p className="font-semibold text-blue-600">
-                    €{parseFloat(risorsa?.costo_orario_finale || 0).toFixed(2)}/h
-                  </p>
-                </div>
-                
-                <div className="space-y-1 col-span-2">
-                  <p className="text-sm text-gray-500">Budget Totale Risorsa</p>
-                  <p className="font-semibold text-green-600 text-xl">
-                    €{parseFloat(risorsa?.budget_risorsa || 0).toFixed(2)}
-                  </p>
-                </div>
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white rounded-lg shadow-sm">
+                <User className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{risorsa?.risorsa_nome}</h2>
+                <p className="text-sm text-gray-600 mt-1">Cliente: {clienteNome}</p>
               </div>
             </div>
-          )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2 px-6 pt-4 border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('progetti')}
+              className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                activeTab === 'progetti'
+                  ? 'bg-white text-blue-600 border-t-2 border-x-2 border-blue-600 -mb-px'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Progetti
+            </button>
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                activeTab === 'info'
+                  ? 'bg-white text-blue-600 border-t-2 border-x-2 border-blue-600 -mb-px'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Info Risorsa
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {activeTab === 'progetti' ? (
+              <>
+                {/* Breadcrumb */}
+                {currentLevel !== 'progetti' && (
+                  <Breadcrumb 
+                    items={getBreadcrumbItems()} 
+                    onNavigate={handleNavigateBack}
+                  />
+                )}
+
+                {/* Loading */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* LIVELLO: PROGETTI */}
+                    {currentLevel === 'progetti' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold text-gray-900">
+                            Progetti di {risorsa?.risorsa_nome}
+                          </h3>
+                          <button
+                            onClick={() => setShowCreateProjectModal(true)}
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg 
+                                     hover:bg-blue-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nuovo Progetto
+                          </button>
+                        </div>
+
+                        {progetti.length === 0 ? (
+                          <EmptyState
+                            icon={FolderOpen}
+                            title="Nessun progetto"
+                            description="Questa risorsa non ha progetti assegnati per questo cliente"
+                            buttonText="Crea Primo Progetto"
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {progetti.map(progetto => (
+                              <ProjectCard
+                                key={progetto.id}
+                                project={progetto}
+                                onClick={() => handleProjectClick(progetto)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LIVELLO: AREE */}
+                    {currentLevel === 'aree' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold text-gray-900">
+                            Aree di {risorsa?.risorsa_nome} in {selectedProject?.nome}
+                          </h3>
+                          <button
+                            onClick={() => setShowCreateAreaModal(true)}
+                            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg 
+                                     hover:bg-purple-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nuova Area
+                          </button>
+                        </div>
+
+                        {aree.length === 0 ? (
+                          <EmptyState
+                            icon={Building2}
+                            title="Nessuna area"
+                            description="Questa risorsa non ha aree assegnate in questo progetto"
+                            buttonText="Crea Prima Area"
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {aree.map(area => (
+                              <AreaCard
+                                key={area.id}
+                                area={area}
+                                onClick={() => handleAreaClick(area)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LIVELLO: ATTIVITÀ */}
+                    {currentLevel === 'attivita' && (
+                      <div>
+                        {console.log('🔍 RENDERING SEZIONE ATTIVITÀ')} {/* <-- AGGIUNGI */}
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold text-gray-900">
+                            Attività di {risorsa?.risorsa_nome} in {selectedArea?.nome}
+                          </h3>
+                          <button
+                            onClick={() => setShowCreateActivityModal(true)}
+                            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg 
+                                     hover:bg-green-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nuova Attività
+                          </button>
+                        </div>
+
+                        {attivita.length === 0 ? (
+                          <EmptyState
+                            icon={Layers}
+                            title="Nessuna attività"
+                            description="Questa risorsa non ha attività assegnate in quest'area"
+                            buttonText="Crea Prima Attività"
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {attivita.map(activity => (
+                              <ActivityCard
+                                key={activity.id}
+                                activity={activity}
+                                onClick={() => handleActivityClick(activity)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LIVELLO: TASK */}
+                    {currentLevel === 'task' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold text-gray-900">
+                            Task di {risorsa?.risorsa_nome} in {selectedActivity?.nome}
+                          </h3>
+                          <button
+                            onClick={() => setShowCreateTaskModal(true)}
+                            className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg 
+                                     hover:bg-orange-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nuova Task
+                          </button>
+                        </div>
+
+                        {tasks.length === 0 ? (
+                          <EmptyState
+                            icon={CheckSquare}
+                            title="Nessuna task"
+                            description="Questa risorsa non ha task assegnate in questa attività"
+                            buttonText="Crea Prima Task"
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {tasks.map(task => (
+                              <TaskCard key={task.id} task={task} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              /* TAB INFO RISORSA */
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-gray-900">Informazioni Risorsa</h3>
+                
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Nome</p>
+                    <p className="font-semibold text-gray-900">{risorsa?.risorsa_nome}</p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Ore Assegnate</p>
+                    <p className="font-semibold text-gray-900">{risorsa?.ore_assegnate}h</p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Costo Orario Base</p>
+                    <p className="font-semibold text-gray-900">
+                      €{parseFloat(risorsa?.costo_orario_base || 0).toFixed(2)}/h
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Costo Orario Finale</p>
+                    <p className="font-semibold text-blue-600">
+                      €{parseFloat(risorsa?.costo_orario_finale || 0).toFixed(2)}/h
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-sm text-gray-500">Budget Totale Risorsa</p>
+                    <p className="font-semibold text-green-600 text-xl">
+                      €{parseFloat(risorsa?.budget_risorsa || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Modal CreateProject */}
+      <CreateProjectModal
+        isOpen={showCreateProjectModal}
+        onClose={() => setShowCreateProjectModal(false)}
+        clienteId={clienteId}
+        clienteNome={clienteNome}
+        onSuccess={handleCreateProjectSuccess}
+      />
+
+      {/* Modal CreateArea */}
+      {selectedProject && (
+        <CreateAreaModal
+          isOpen={showCreateAreaModal}
+          onClose={() => setShowCreateAreaModal(false)}
+          progettoId={selectedProject.id}
+          progettoNome={selectedProject.nome}
+          onSuccess={handleCreateAreaSuccess}
+        />
+      )}
+
+      {/* Modal CreateActivity */}
+      {selectedArea && (
+        <CreateActivityModal
+          isOpen={showCreateActivityModal}
+          onClose={() => setShowCreateActivityModal(false)}
+          areaId={selectedArea.id}
+          areaNome={selectedArea.nome}
+          progettoId={selectedProject.id}
+          clienteId={clienteId}
+          onSuccess={handleCreateActivitySuccess}
+        />
+      )}
+
+      {/* Modal CreateTask */}
+      {selectedActivity && (
+        <CreateTaskModal
+          isOpen={showCreateTaskModal}
+          onClose={() => setShowCreateTaskModal(false)}
+          attivitaId={selectedActivity.id}
+          attivitaNome={selectedActivity.nome}
+          onSuccess={handleCreateTaskSuccess}
+        />
+      )}
+    </>
   );
 };
 

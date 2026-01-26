@@ -8,8 +8,7 @@ const router = express.Router();
 // GET /api/activities - Lista attività
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { progetto_id, stato } = req.query;
-
+    const { progetto_id, area_id, stato } = req.query; // <-- AGGIUNGI area_id
     let whereClause = 'WHERE 1=1';
     let params = [];
 
@@ -25,6 +24,12 @@ router.get('/', authenticateToken, async (req, res) => {
     if (progetto_id) {
       whereClause += ' AND a.progetto_id = $' + (params.length + 1);
       params.push(progetto_id);
+    }
+
+    // 🆕 AGGIUNGI QUESTO BLOCCO
+    if (area_id) {
+      whereClause += ' AND a.area_id = $' + (params.length + 1);
+      params.push(area_id);
     }
 
     if (stato) {
@@ -113,7 +118,7 @@ const result = await query(`
 // POST /api/activities - Crea nuova attività
 router.post('/', authenticateToken, requireResource, validateActivity, async (req, res) => {
   try {
-    const { nome, descrizione, progetto_id, ore_stimate, scadenza, risorse_assegnate } = req.body;
+    const { nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, risorse_assegnate } = req.body; // <-- AGGIUNGI area_id
 
     await transaction(async (client) => {
       // Verifica permessi sul progetto
@@ -131,12 +136,12 @@ router.post('/', authenticateToken, requireResource, validateActivity, async (re
         throw new Error('Project not found or access denied');
       }
 
-      // Crea attività
+// Crea attività
 const activityResult = await client.query(`
-  INSERT INTO attivita (nome, descrizione, progetto_id, ore_stimate, scadenza, creata_da)
-  VALUES ($1, $2, $3, $4, $5, $6)
+  INSERT INTO attivita (nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, creata_da)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
   RETURNING *
-`, [nome, descrizione, progetto_id, ore_stimate, scadenza, req.user.id]);
+`, [nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, req.user.id]);
 
       const activity = activityResult.rows[0];
 
