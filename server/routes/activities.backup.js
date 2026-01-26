@@ -6,16 +6,18 @@ const { validateActivity, validateUUID, validatePagination } = require('../middl
 const router = express.Router();
 
 // GET /api/activities - Lista attività
-router.get('/', authenticateToken, validatePagination, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { progetto_id, stato, utente_id } = req.query;
-
+    const { progetto_id, area_id, stato } = req.query; // <-- AGGIUNGI area_id
     let whereClause = 'WHERE 1=1';
     let params = [];
 
-    // Filtro per risorsa: vede solo le sue attività
+    // Risorsa vede solo le sue attività
     if (req.user.ruolo === 'risorsa') {
-      whereClause += ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $1)';
+      whereClause += ` AND (
+        EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $1)
+        OR p.creato_da_risorsa = $1
+      )`;
       params.push(req.user.id);
     }
 
@@ -24,69 +26,99 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
       params.push(progetto_id);
     }
 
+    // 🆕 AGGIUNGI QUESTO BLOCCO
+    if (area_id) {
+      whereClause += ' AND a.area_id = $' + (params.length + 1);
+      params.push(area_id);
+    }
+
     if (stato) {
       whereClause += ' AND a.stato = $' + (params.length + 1);
       params.push(stato);
     }
 
-    if (utente_id && req.user.ruolo === 'manager') {
-      whereClause += ' AND EXISTS (SELECT 1 FROM assegnazioni_attivita aa WHERE aa.attivita_id = a.id AND aa.utente_id = $' + (params.length + 1) + ')';
-      params.push(utente_id);
-    }
+    // ✅ QUERY CORRETTA CON CONTEGGIO RISORSE
+const result = await query(`
+  SELECT 
+    a.id, 
+    a.nome, 
+    a.descrizione, 
+    a.ore_stimate, 
+    a.scadenza, 
+    a.stato,
+    a.data_creazione, 
+    a.data_aggiornamento,
+    -- Progetto e cliente info
+    p.nome as progetto_nome, 
+    p.id as progetto_id,
+    c.nome as cliente_nome,
+    c.id as cliente_id,
+    -- ✅ CONTEGGIO RISORSE ASSEGNATE
+    COUNT(DISTINCT aa.utente_id) as numero_risorse,
+    -- ✅ CALCOLI SAFE CON COALESCE (gestisce NULL)
+    COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
+    COALESCE(COUNT(DISTINCT t.id), 0) as totale_task,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END), 0) as task_completate,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'in_esecuzione' THEN t.id END), 0) as task_in_corso,
+    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'programmata' THEN t.id END), 0) as task_programmate,
+    -- ✅ Percentuale completamento SAFE (evita divisione per zero)
+    CASE 
+      WHEN COUNT(DISTINCT t.id) > 0 THEN 
+        ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
+      ELSE 0
+    END as percentuale_completamento,
+    -- ✅ Scostamento ore SAFE
+    CASE 
+      WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
+        ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
+      ELSE 0
+    END as scostamento_percentuale,
+    -- ✅ In ritardo SAFE
+    CASE 
+      WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
+      ELSE false 
+    END as in_ritardo
+  FROM attivita a
+  JOIN progetti p ON a.progetto_id = p.id
+  JOIN clienti c ON p.cliente_id = c.id
+  LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id  -- ✅ AGGIUNTO JOIN RISORSE
+  LEFT JOIN task t ON a.id = t.attivita_id
+  ${whereClause}
+  GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato,
+           a.data_creazione, a.data_aggiornamento,
+           p.nome, p.id, c.nome, c.id
+  ORDER BY 
+    CASE WHEN a.stato = 'in_esecuzione' THEN 1 
+         WHEN a.stato = 'programmata' THEN 2 
+         ELSE 3 END,
+    a.scadenza ASC
+`, params);
 
-    const result = await query(`
-      SELECT 
-        a.id, a.nome, a.descrizione, a.ore_stimate, a.ore_effettive,
-        a.scadenza, a.stato, a.data_creazione,
-        p.nome as progetto_nome, p.id as progetto_id,
-        c.nome as cliente_nome,
-        -- Risorse assegnate
-        COUNT(DISTINCT aa.utente_id) as numero_risorse,
-        -- Task statistiche  
-        COUNT(DISTINCT t.id) as numero_task,
-        COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END) as task_completate,
-        -- Performance ore stimate vs effettive
-        CASE 
-          WHEN a.ore_effettive > 0 THEN 
-            ROUND(((a.ore_effettive - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
-          ELSE NULL 
-        END as scostamento_percentuale
-      FROM attivita a
-      JOIN progetti p ON a.progetto_id = p.id
-      JOIN clienti c ON p.cliente_id = c.id
-      LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id
-      LEFT JOIN task t ON a.id = t.attivita_id
-      ${whereClause}
-      GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.ore_effettive,
-               a.scadenza, a.stato, a.data_creazione, p.nome, p.id, c.nome
-      ORDER BY a.scadenza ASC
-    `, params);
-
-    // Ottieni risorse per ogni attività
-    for (let activity of result.rows) {
-      const resourcesResult = await query(`
-        SELECT u.id, u.nome, u.email, aa.data_assegnazione
-        FROM assegnazioni_attivita aa
-        JOIN utenti u ON aa.utente_id = u.id
-        WHERE aa.attivita_id = $1
-        ORDER BY aa.data_assegnazione ASC
-      `, [activity.id]);
-
-      activity.risorse_assegnate = resourcesResult.rows;
-    }
-
-    res.json({ activities: result.rows });
+    res.json({ 
+      activities: result.rows,
+      summary: {
+        totali: result.rows.length,
+        programmate: result.rows.filter(a => a.stato === 'programmata').length,
+        in_esecuzione: result.rows.filter(a => a.stato === 'in_esecuzione').length,
+        completate: result.rows.filter(a => a.stato === 'completata').length,
+        in_ritardo: result.rows.filter(a => a.in_ritardo).length
+      }
+    });
 
   } catch (error) {
-    console.error('Get activities error:', error);
-    res.status(500).json({ error: 'Server Error', details: 'Failed to fetch activities' });
+    console.error('❌ Get activities error:', error);
+    res.status(500).json({ 
+      error: 'Server Error', 
+      details: error.message || 'Failed to fetch activities',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
 // POST /api/activities - Crea nuova attività
 router.post('/', authenticateToken, requireResource, validateActivity, async (req, res) => {
   try {
-    const { nome, descrizione, progetto_id, ore_stimate, scadenza, risorse_assegnate } = req.body;
+    const { nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, risorse_assegnate } = req.body; // <-- AGGIUNGI area_id
 
     await transaction(async (client) => {
       // Verifica permessi sul progetto
@@ -104,12 +136,12 @@ router.post('/', authenticateToken, requireResource, validateActivity, async (re
         throw new Error('Project not found or access denied');
       }
 
-      // Crea attività
+// Crea attività
 const activityResult = await client.query(`
-  INSERT INTO attivita (nome, descrizione, progetto_id, ore_stimate, scadenza, creata_da)
-  VALUES ($1, $2, $3, $4, $5, $6)
+  INSERT INTO attivita (nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, creata_da)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
   RETURNING *
-`, [nome, descrizione, progetto_id, ore_stimate, scadenza, req.user.id]);
+`, [nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, req.user.id]);
 
       const activity = activityResult.rows[0];
 

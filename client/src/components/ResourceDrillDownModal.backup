@@ -44,267 +44,109 @@ const Breadcrumb = ({ items, onNavigate }) => (
 // ============================================
 // COMPONENTE: Card Progetto
 // ============================================
-const ProjectCard = ({ project, onClick }) => {
-  // Calcola percentuale budget
-  const budgetPreventivato = parseFloat(project.budget_assegnato || 0);
-  const budgetEffettivo = parseFloat(project.budget_effettivo || 0);
-  const percentualeBudget = budgetPreventivato > 0 
-    ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
-    : 0;
-  
-  // Determina colore budget
-  const getBudgetColor = () => {
-    if (budgetEffettivo > budgetPreventivato) return 'bg-red-500'; // Sforato
-    if (percentualeBudget > 80) return 'bg-yellow-500'; // Attenzione
-    return 'bg-green-500'; // Ok
-  };
-
-  return (
-    <div 
-      onClick={onClick}
-      className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
-                 hover:shadow-md transition-all cursor-pointer group"
-    >
-      <div className="flex items-start gap-3 mb-3">
-        <FolderOpen className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-            {project.nome}
-          </h4>
-          {project.descrizione && (
-            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{project.descrizione}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Progress Bars */}
-      <div className="space-y-3 mb-3">
-        {/* Progress Bar Budget */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Budget</span>
-            <span className="text-xs font-medium text-gray-900">
-              €{budgetEffettivo.toFixed(0)} / €{budgetPreventivato.toFixed(0)}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${getBudgetColor()}`}
-              style={{ width: `${percentualeBudget}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Progress Bar Ore */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Ore</span>
-            <span className="text-xs font-medium text-gray-900">
-              {(project.ore_totali_utilizzate / 60).toFixed(0)}h
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
-              style={{ width: `${Math.min(100, (project.ore_totali_utilizzate / (project.ore_totali_assegnate || 1)) * 100)}%` }}
-            />
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center text-gray-500">
-          <Building2 className="w-4 h-4 mr-1" />
-          <span>{project.numero_aree || 0} aree</span>
-        </div>
-        <span className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">
-          Click per aree →
-        </span>
+const ProjectCard = ({ project, onClick }) => (
+  <div 
+    onClick={onClick}
+    className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
+               hover:shadow-md transition-all cursor-pointer group"
+  >
+    <div className="flex items-start gap-3 mb-3">
+      <FolderOpen className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">
+          {project.nome}
+        </h4>
+        {project.descrizione && (
+          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{project.descrizione}</p>
+        )}
       </div>
     </div>
-  );
-};
+    
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center text-gray-500">
+        <Building2 className="w-4 h-4 mr-1" />
+        <span>{project.numero_aree || 0} aree</span>
+      </div>
+      <span className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">
+        Click per aree →
+      </span>
+    </div>
+  </div>
+);
 
 // ============================================
 // COMPONENTE: Card Area
 // ============================================
-const AreaCard = ({ area, onClick }) => {
-  // Calcola percentuali
-  const budgetPreventivato = parseFloat(area.budget_preventivato || 0);
-  const budgetEffettivo = parseFloat(area.budget_effettivo || 0);
-  const percentualeBudget = budgetPreventivato > 0 
-    ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
-    : 0;
-
-  const percentualeCompletamento = parseFloat(area.percentuale_completamento || 0);
-
-  const getBudgetColor = () => {
-    if (budgetEffettivo > budgetPreventivato) return 'bg-red-500';
-    if (percentualeBudget > 80) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  return (
-    <div 
-      onClick={onClick}
-      className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
-                 hover:shadow-md transition-all cursor-pointer group"
-    >
-      <div className="flex items-start gap-3 mb-3">
-        <Building2 className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 group-hover:text-purple-600 transition-colors line-clamp-1">
-            {area.nome}
-          </h4>
-          {area.descrizione && (
-            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{area.descrizione}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Progress Bars */}
-      <div className="space-y-3 mb-3">
-        {/* Progress Bar Budget */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Budget</span>
-            <span className="text-xs font-medium text-gray-900">
-              €{budgetEffettivo.toFixed(0)} / €{budgetPreventivato.toFixed(0)}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${getBudgetColor()}`}
-              style={{ width: `${percentualeBudget}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Progress Bar Task */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Completamento</span>
-            <span className="text-xs font-medium text-gray-900">
-              {percentualeCompletamento.toFixed(0)}%
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                percentualeCompletamento === 100 ? 'bg-green-500' : 
-                percentualeCompletamento > 50 ? 'bg-blue-500' : 'bg-blue-400'
-              }`}
-              style={{ width: `${percentualeCompletamento}%` }}
-            />
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center text-gray-500">
-          <Layers className="w-4 h-4 mr-1" />
-          <span>{area.numero_attivita || 0} attività</span>
-        </div>
-        <span className="text-xs text-gray-400 group-hover:text-purple-500 transition-colors">
-          Click per attività →
-        </span>
+const AreaCard = ({ area, onClick }) => (
+  <div 
+    onClick={onClick}
+    className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
+               hover:shadow-md transition-all cursor-pointer group"
+  >
+    <div className="flex items-start gap-3 mb-3">
+      <Building2 className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-gray-900 group-hover:text-purple-600 transition-colors line-clamp-1">
+          {area.nome}
+        </h4>
+        {area.descrizione && (
+          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{area.descrizione}</p>
+        )}
       </div>
     </div>
-  );
-};
+    
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center text-gray-500">
+        <Layers className="w-4 h-4 mr-1" />
+        <span>{area.numero_attivita || 0} attività</span>
+      </div>
+      <span className="text-xs text-gray-400 group-hover:text-purple-500 transition-colors">
+        Click per attività →
+      </span>
+    </div>
+  </div>
+);
 
 // ============================================
 // COMPONENTE: Card Attività
 // ============================================
-const ActivityCard = ({ activity, onClick }) => {
-  // Calcola percentuali
-  const budgetPreventivato = parseFloat(activity.budget_preventivato || 0);
-  const budgetEffettivo = parseFloat(activity.budget_effettivo || 0);
-  const percentualeBudget = budgetPreventivato > 0 
-    ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
-    : 0;
-
-  const totaleTask = parseInt(activity.totale_task || activity.numero_task || 0);
-  const taskCompletate = parseInt(activity.task_completate || 0);
-  const percentualeTask = totaleTask > 0 ? (taskCompletate / totaleTask) * 100 : 0;
-
-  const getBudgetColor = () => {
-    if (budgetEffettivo > budgetPreventivato) return 'bg-red-500';
-    if (percentualeBudget > 80) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  return (
-    <div 
-      onClick={onClick}
-      className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
-                 hover:shadow-md transition-all cursor-pointer group"
-    >
-      <div className="flex items-start gap-3 mb-3">
-        <Layers className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors line-clamp-1">
-            {activity.nome}
-          </h4>
-          {activity.descrizione && (
-            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{activity.descrizione}</p>
-          )}
-        </div>
+const ActivityCard = ({ activity, onClick }) => (
+  <div 
+    onClick={onClick}
+    className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
+               hover:shadow-md transition-all cursor-pointer group"
+  >
+    <div className="flex items-start gap-3 mb-3">
+      <Layers className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors line-clamp-1">
+          {activity.nome}
+        </h4>
+        {activity.descrizione && (
+          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{activity.descrizione}</p>
+        )}
       </div>
-
-      {/* Progress Bars */}
-      <div className="space-y-3 mb-3">
-        {/* Progress Bar Budget */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Budget</span>
-            <span className="text-xs font-medium text-gray-900">
-              €{budgetEffettivo.toFixed(0)} / €{budgetPreventivato.toFixed(0)}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${getBudgetColor()}`}
-              style={{ width: `${percentualeBudget}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Progress Bar Task */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Task</span>
-            <span className="text-xs font-medium text-gray-900">
-              {taskCompletate}/{totaleTask}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                percentualeTask === 100 ? 'bg-green-500' : 
-                percentualeTask > 50 ? 'bg-blue-500' : 'bg-blue-400'
-              }`}
-              style={{ width: `${percentualeTask}%` }}
-            />
-          </div>
-        </div>
+    </div>
+    
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center text-gray-500">
+        <CheckSquare className="w-4 h-4 mr-1" />
+        <span>{activity.numero_task || 0} task</span>
       </div>
-      
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center text-gray-500">
-          <CheckSquare className="w-4 h-4 mr-1" />
-          <span>{totaleTask} task</span>
-        </div>
+      <div className="flex items-center gap-2">
         {activity.scadenza && (
           <span className="text-xs text-gray-500">
             <Calendar className="w-3 h-3 inline mr-1" />
             {new Date(activity.scadenza).toLocaleDateString('it-IT')}
           </span>
         )}
+        <span className="text-xs text-gray-400 group-hover:text-green-500 transition-colors">
+          Click per task →
+        </span>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 // ============================================
 // COMPONENTE: Card Task
@@ -318,69 +160,36 @@ const TaskCard = ({ task }) => {
     }
   };
 
-  // Calcola budget
-  const budgetPreventivato = parseFloat(task.budget_preventivato || 0);
-  const budgetEffettivo = parseFloat(task.budget_effettivo || 0);
-  const percentualeBudget = budgetPreventivato > 0 
-    ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
-    : 0;
-
-  const getBudgetColor = () => {
-    if (task.stato !== 'completata') return 'bg-gray-400'; // Non completata
-    if (budgetEffettivo > budgetPreventivato) return 'bg-red-500'; // Sforato
-    if (percentualeBudget > 80) return 'bg-yellow-500'; // Attenzione
-    return 'bg-green-500'; // Ok
-  };
-
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 transition-all">
-      <div className="flex items-start justify-between mb-2">
-        <h5 className="font-semibold text-gray-900 line-clamp-1">{task.nome}</h5>
-        <span className={`px-2 py-1 rounded-full text-xs whitespace-nowrap ${getStatusColor(task.stato)}`}>
-          {task.stato?.replace('_', ' ')}
-        </span>
+      <div className="flex items-start gap-3 mb-3">
+        <CheckSquare className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-gray-900 line-clamp-1">{task.nome}</h4>
+          {task.descrizione && (
+            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{task.descrizione}</p>
+          )}
+        </div>
       </div>
       
-      {task.descrizione && (
-        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.descrizione}</p>
-      )}
-
-      {/* Progress Bar Budget */}
-      {task.stato === 'completata' && budgetPreventivato > 0 && (
-        <div className="mb-3">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Budget</span>
-            <span className="text-xs font-medium text-gray-900">
-              €{budgetEffettivo.toFixed(0)} / €{budgetPreventivato.toFixed(0)}
+      <div className="flex items-center justify-between text-sm">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(task.stato)}`}>
+          {task.stato}
+        </span>
+        <div className="flex items-center gap-3 text-gray-500">
+          {task.ore_stimate && (
+            <span className="flex items-center">
+              <Clock className="w-4 h-4 mr-1" />
+              {task.ore_stimate}h
             </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${getBudgetColor()}`}
-              style={{ width: `${percentualeBudget}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Metriche ore */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <div className="flex items-center gap-3">
-          <span>
-            Stimate: {task.ore_stimate}min
-          </span>
-          {task.ore_effettive && (
-            <span className="text-blue-600 font-medium">
-              Effettive: {task.ore_effettive}min
+          )}
+          {task.scadenza && (
+            <span className="flex items-center text-xs">
+              <Calendar className="w-3 h-3 mr-1" />
+              {new Date(task.scadenza).toLocaleDateString('it-IT')}
             </span>
           )}
         </div>
-        {task.scadenza && (
-          <span className="whitespace-nowrap">
-            <Calendar className="w-3 h-3 inline mr-1" />
-            {new Date(task.scadenza).toLocaleDateString('it-IT')}
-          </span>
-        )}
       </div>
     </div>
   );

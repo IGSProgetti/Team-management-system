@@ -24,10 +24,11 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
       params.push(attivita_id);
     }
 
-    if (stato) {
-      whereClause += ' AND t.stato = $' + (params.length + 1);
-      params.push(stato);
-    }
+    // Gestisci filtro stato - ignora se "all"
+if (stato && stato !== 'all') {
+  whereClause += ' AND t.stato = $' + (params.length + 1);
+  params.push(stato);
+}
 
     if (utente_assegnato && req.user.ruolo === 'manager') {
       whereClause += ' AND t.utente_assegnato = $' + (params.length + 1);
@@ -45,11 +46,11 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
     }
 
     const result = await query(`
-      SELECT 
-        t.id, t.nome, t.descrizione, t.ore_stimate, t.ore_effettive,
-        t.scadenza, t.stato, t.data_creazione, t.data_aggiornamento,
-        -- Attività info
-        a.nome as attivita_nome, a.id as attivita_id,
+  SELECT 
+    t.id, t.nome, t.descrizione, t.ore_stimate, t.ore_effettive,
+    t.scadenza, t.stato, t.utente_assegnato, t.data_creazione, t.data_aggiornamento,
+    -- Attività info
+    a.nome as attivita_nome, a.id as attivita_id,
         -- Progetto e cliente info
         p.nome as progetto_nome, p.id as progetto_id,
         c.nome as cliente_nome,

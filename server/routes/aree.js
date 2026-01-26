@@ -18,15 +18,25 @@ const validateArea = [
 // GET /api/aree - Lista aree
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { progetto_id, coordinatore_id, stato } = req.query;
+    const { progetto_id, risorsa_id, coordinatore_id, stato } = req.query; // ✅ TUTTI I PARAMETRI
 
     let whereClause = 'WHERE a.attivo = true';
     let params = [];
 
-    // Filtro per progetto
     if (progetto_id) {
-      whereClause += ' AND a.progetto_id = $' + (params.length + 1);
+      whereClause += ' AND a.progetto_id = $1';
       params.push(progetto_id);
+    }
+
+    // 🆕 FILTRO RISORSA
+    if (risorsa_id) {
+      whereClause += ` AND EXISTS (
+        SELECT 1 FROM attivita att2
+        JOIN task t2 ON t2.attivita_id = att2.id
+        WHERE att2.area_id = a.id 
+        AND t2.utente_assegnato = $${params.length + 1}
+      )`;
+      params.push(risorsa_id);
     }
 
     // Filtro per coordinatore
@@ -54,51 +64,75 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     const result = await query(`
-      SELECT 
-        a.id,
-        a.nome,
-        a.descrizione,
-        a.progetto_id,
-        a.coordinatore_id,
-        a.budget_stimato,
-        a.ore_stimate,
-        a.ore_effettive,
-        a.scadenza,
-        a.stato,
-        a.data_creazione,
-        a.data_aggiornamento,
-        -- Info progetto
-        p.nome as progetto_nome,
-        c.nome as cliente_nome,
-        c.id as cliente_id,
-        -- Info coordinatore
-        u.nome as coordinatore_nome,
-        u.email as coordinatore_email,
-        -- Statistiche attività
-        COUNT(DISTINCT att.id) as numero_attivita,
-        COUNT(DISTINCT CASE WHEN att.stato = 'completata' THEN att.id END) as attivita_completate,
-        -- Statistiche task
-        COUNT(DISTINCT t.id) as numero_task,
-        COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END) as task_completate,
-        -- Percentuale completamento
-        CASE 
-          WHEN COUNT(DISTINCT t.id) > 0 THEN 
-            ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
-          ELSE 0
-        END as percentuale_completamento
-      FROM aree a
-      JOIN progetti p ON a.progetto_id = p.id
-      JOIN clienti c ON p.cliente_id = c.id
-      LEFT JOIN utenti u ON a.coordinatore_id = u.id
-      LEFT JOIN attivita att ON att.area_id = a.id
-      LEFT JOIN task t ON t.attivita_id = att.id
-      ${whereClause}
-      GROUP BY a.id, a.nome, a.descrizione, a.progetto_id, a.coordinatore_id,
-               a.budget_stimato, a.ore_stimate, a.ore_effettive, a.scadenza, a.stato,
-               a.data_creazione, a.data_aggiornamento, p.nome, c.nome, c.id,
-               u.nome, u.email
-      ORDER BY a.data_creazione DESC
-    `, params);
+  SELECT 
+    a.id,
+    a.nome,
+    a.descrizione,
+    a.progetto_id,
+    a.coordinatore_id,
+    a.budget_stimato,
+    a.ore_stimate,
+    a.ore_effettive,
+    a.scadenza,
+    a.stato,
+    a.data_creazione,
+    a.data_aggiornamento,
+    
+    -- Info progetto
+    p.nome as progetto_nome,
+    c.nome as cliente_nome,
+    c.id as cliente_id,
+    
+    -- Info coordinatore
+    u.nome as coordinatore_nome,
+    u.email as coordinatore_email,
+    
+    -- Statistiche attività
+    COUNT(DISTINCT att.id) as numero_attivita,
+    COUNT(DISTINCT CASE WHEN att.stato = 'completata' THEN att.id END) as attivita_completate,
+    
+    -- Statistiche task
+    COUNT(DISTINCT t.id) as numero_task,
+    COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END) as task_completate,
+    
+    -- 💰 BUDGET PREVENTIVATO AREA - Filtrato per risorsa se risorsa_id è presente
+COALESCE(ROUND(SUM(
+  CASE WHEN 1=1
+    ${risorsa_id ? `AND t.utente_assegnato = $${params.indexOf(risorsa_id) + 1}` : ''}
+  THEN (t.ore_stimate / 60.0) * COALESCE(acr.costo_orario_finale, ut.costo_orario, 0)
+  ELSE 0 END
+), 2), 0) as budget_preventivato,
+
+-- 💰 BUDGET EFFETTIVO AREA - Filtrato per risorsa se risorsa_id è presente
+COALESCE(ROUND(SUM(
+  CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
+    ${risorsa_id ? `AND t.utente_assegnato = $${params.indexOf(risorsa_id) + 1}` : ''}
+  THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, ut.costo_orario, 0)
+  ELSE 0 END
+), 2), 0) as budget_effettivo,
+    
+    -- Percentuale completamento
+    CASE 
+      WHEN COUNT(DISTINCT t.id) > 0 THEN 
+        ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
+      ELSE 0
+    END as percentuale_completamento
+    
+  FROM aree a
+  JOIN progetti p ON a.progetto_id = p.id
+  JOIN clienti c ON p.cliente_id = c.id
+  LEFT JOIN utenti u ON a.coordinatore_id = u.id
+  LEFT JOIN attivita att ON att.area_id = a.id
+  LEFT JOIN task t ON t.attivita_id = att.id
+  LEFT JOIN utenti ut ON t.utente_assegnato = ut.id
+  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
+  ${whereClause}
+  GROUP BY a.id, a.nome, a.descrizione, a.progetto_id, a.coordinatore_id,
+           a.budget_stimato, a.ore_stimate, a.ore_effettive, a.scadenza, a.stato,
+           a.data_creazione, a.data_aggiornamento, p.nome, c.nome, c.id,
+           u.nome, u.email
+  ORDER BY a.data_creazione DESC
+`, params);
 
     res.json({ aree: result.rows });
 

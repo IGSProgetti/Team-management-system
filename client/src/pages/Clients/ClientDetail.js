@@ -12,7 +12,8 @@ import {
   FolderOpen,
   Users,
   TrendingUp,
-  X
+  X,
+  Trash2  // 🆕 AGGIUNGI QUESTA RIGA
 } from 'lucide-react';
 import api from '../../utils/api';
 import ClientResourceAssignment from '../../components/ClientResourceAssignment';
@@ -409,9 +410,67 @@ const ClientDetail = () => {
   };
 
   const handleCreateProjectSuccess = () => {
-    loadProgetti();
-    loadCliente();
-  };
+  loadProgetti();
+  loadCliente();
+};
+
+// 🆕 AGGIUNGI QUESTA FUNZIONE
+const handleDeleteCliente = async () => {
+  // Conferma eliminazione
+  const conferma = window.confirm(
+    `⚠️ ATTENZIONE!\n\n` +
+    `Stai per eliminare il cliente "${cliente.nome}" e TUTTI i dati associati:\n\n` +
+    `• Tutti i progetti\n` +
+    `• Tutte le aree\n` +
+    `• Tutte le attività\n` +
+    `• Tutte le task\n` +
+    `• Tutte le assegnazioni\n\n` +
+    `Questa operazione è IRREVERSIBILE!\n\n` +
+    `Sei sicuro di voler procedere?`
+  );
+
+  if (!conferma) return;
+
+  // Doppia conferma per sicurezza
+  const doppiaConferma = window.confirm(
+    `🚨 ULTIMA CONFERMA!\n\n` +
+    `Confermi di voler eliminare definitivamente "${cliente.nome}"?\n\n` +
+    `QUESTA AZIONE NON PUÒ ESSERE ANNULLATA!`
+  );
+
+  if (!doppiaConferma) return;
+
+  try {
+    setLoading(true);
+    
+    const response = await api.delete(`/clients/${id}`);
+    
+    console.log('✅ Cliente eliminato:', response.data);
+    
+    // Mostra messaggio successo
+    alert(
+      `✅ CLIENTE ELIMINATO\n\n` +
+      `Cliente: ${response.data.deleted.cliente}\n` +
+      `Progetti eliminati: ${response.data.deleted.progetti}\n` +
+      `Aree eliminate: ${response.data.deleted.aree}\n` +
+      `Attività eliminate: ${response.data.deleted.attivita}\n` +
+      `Task eliminate: ${response.data.deleted.task}`
+    );
+    
+    // Torna alla lista clienti
+    navigate('/clients');
+    
+  } catch (error) {
+    console.error('❌ Errore eliminazione cliente:', error);
+    alert(
+      `❌ ERRORE!\n\n` +
+      `Impossibile eliminare il cliente.\n\n` +
+      `Errore: ${error.response?.data?.details || error.message}`
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (loading) {
     return (
@@ -458,26 +517,37 @@ const ClientDetail = () => {
       </div>
 
       {/* Header Cliente */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-start gap-4">
-            <button
-              onClick={() => navigate('/clients')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Building2 className="w-6 h-6 text-blue-600" />
-                <h1 className="text-3xl font-bold text-gray-900">{cliente.nome}</h1>
-              </div>
-              {cliente.descrizione && (
-                <p className="text-gray-600 mt-2">{cliente.descrizione}</p>
-              )}
-            </div>
-          </div>
+<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+  <div className="flex items-start justify-between mb-6">
+    <div className="flex items-start gap-4">
+      <button
+        onClick={() => navigate('/clients')}
+        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+      >
+        <ArrowLeft className="w-5 h-5 text-gray-600" />
+      </button>
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <Building2 className="w-6 h-6 text-blue-600" />
+          <h1 className="text-3xl font-bold text-gray-900">{cliente.nome}</h1>
         </div>
+        {cliente.descrizione && (
+          <p className="text-gray-600 mt-2">{cliente.descrizione}</p>
+        )}
+      </div>
+    </div>
+    
+    {/* 🆕 PULSANTE ELIMINA CLIENTE */}
+    <button
+      onClick={handleDeleteCliente}
+      disabled={loading}
+      className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg 
+                 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <Trash2 className="w-4 h-4 mr-2" />
+      Elimina Cliente
+    </button>
+  </div>
 
         {/* Metriche Budget */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

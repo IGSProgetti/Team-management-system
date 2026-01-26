@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /api/activities - Lista attività
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { progetto_id, area_id, stato } = req.query; // <-- AGGIUNGI area_id
+    const { progetto_id, area_id, stato, risorsa_id } = req.query; // <-- AGGIUNGI area_id
     let whereClause = 'WHERE 1=1';
     let params = [];
 
@@ -27,15 +27,25 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     // 🆕 AGGIUNGI QUESTO BLOCCO
-    if (area_id) {
-      whereClause += ' AND a.area_id = $' + (params.length + 1);
-      params.push(area_id);
-    }
+if (area_id) {
+  whereClause += ' AND a.area_id = $' + (params.length + 1);
+  params.push(area_id);
+}
 
-    if (stato) {
-      whereClause += ' AND a.stato = $' + (params.length + 1);
-      params.push(stato);
-    }
+if (stato) {
+  whereClause += ' AND a.stato = $' + (params.length + 1);
+  params.push(stato);
+}
+
+// 🆕 FILTRO RISORSA: Mostra solo attività dove la risorsa ha almeno 1 task
+if (risorsa_id) {
+  whereClause += ` AND EXISTS (
+    SELECT 1 FROM task t2
+    WHERE t2.attivita_id = a.id 
+    AND t2.utente_assegnato = $${params.length + 1}
+  )`;
+  params.push(risorsa_id);
+}
 
     // ✅ QUERY CORRETTA CON CONTEGGIO RISORSE
 const result = await query(`
@@ -48,41 +58,71 @@ const result = await query(`
     a.stato,
     a.data_creazione, 
     a.data_aggiornamento,
+    
     -- Progetto e cliente info
     p.nome as progetto_nome, 
     p.id as progetto_id,
     c.nome as cliente_nome,
     c.id as cliente_id,
-    -- ✅ CONTEGGIO RISORSE ASSEGNATE
+    
+    -- Conteggio risorse assegnate
     COUNT(DISTINCT aa.utente_id) as numero_risorse,
-    -- ✅ CALCOLI SAFE CON COALESCE (gestisce NULL)
+    
+    -- Ore (in minuti)
     COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
+    
+    -- 💰 BUDGET PREVENTIVATO ATTIVITÀ - Filtrato per risorsa se risorsa_id è presente
+COALESCE(ROUND(SUM(
+  CASE 
+    WHEN ${risorsa_id ? `t.utente_assegnato = $${params.length}` : '1=1'}
+    THEN (t.ore_stimate / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
+    ELSE 0 
+  END
+), 2), 0) as budget_preventivato,
+
+-- 💰 BUDGET EFFETTIVO ATTIVITÀ - Filtrato per risorsa se risorsa_id è presente
+COALESCE(ROUND(SUM(
+  CASE 
+    WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
+      ${risorsa_id ? `AND t.utente_assegnato = $${params.length}` : ''}
+    THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
+    ELSE 0 
+  END
+), 2), 0) as budget_effettivo,
+    
+    -- Task statistiche
     COALESCE(COUNT(DISTINCT t.id), 0) as totale_task,
     COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END), 0) as task_completate,
     COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'in_esecuzione' THEN t.id END), 0) as task_in_corso,
     COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'programmata' THEN t.id END), 0) as task_programmate,
-    -- ✅ Percentuale completamento SAFE (evita divisione per zero)
+    
+    -- Percentuale completamento SAFE
     CASE 
       WHEN COUNT(DISTINCT t.id) > 0 THEN 
         ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
       ELSE 0
     END as percentuale_completamento,
-    -- ✅ Scostamento ore SAFE
+    
+    -- Scostamento ore SAFE
     CASE 
       WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
         ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
       ELSE 0
     END as scostamento_percentuale,
-    -- ✅ In ritardo SAFE
+    
+    -- In ritardo SAFE
     CASE 
       WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
       ELSE false 
     END as in_ritardo
+    
   FROM attivita a
   JOIN progetti p ON a.progetto_id = p.id
   JOIN clienti c ON p.cliente_id = c.id
-  LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id  -- ✅ AGGIUNTO JOIN RISORSE
+  LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id
   LEFT JOIN task t ON a.id = t.attivita_id
+  LEFT JOIN utenti u ON t.utente_assegnato = u.id
+  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
   ${whereClause}
   GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato,
            a.data_creazione, a.data_aggiornamento,
