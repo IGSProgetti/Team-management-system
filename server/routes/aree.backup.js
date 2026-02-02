@@ -73,8 +73,6 @@ if (risorsa_id) {
     a.progetto_id,
     a.coordinatore_id,
     a.budget_stimato,
-    a.budget_assegnato,        
-    a.budget_utilizzato,       
     a.ore_stimate,
     a.ore_effettive,
     a.scadenza,
@@ -132,7 +130,7 @@ COALESCE(ROUND(SUM(
   LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
   ${whereClause}
   GROUP BY a.id, a.nome, a.descrizione, a.progetto_id, a.coordinatore_id,
-           a.budget_stimato, a.budget_assegnato, a.budget_utilizzato, a.ore_stimate, a.ore_effettive, a.scadenza, a.stato,
+           a.budget_stimato, a.ore_stimate, a.ore_effettive, a.scadenza, a.stato,
            a.data_creazione, a.data_aggiornamento, p.nome, c.nome, c.id,
            u.nome, u.email
   ORDER BY a.data_creazione DESC
@@ -191,11 +189,7 @@ router.get('/:id', authenticateToken, param('id').isUUID(), async (req, res) => 
   }
 });
 
-  // ============================================
-// 🔄 SOSTITUISCI IL POST /api/aree IN server/routes/aree.js
-// ============================================
-
-// POST /api/aree - Crea nuova area CON ASSEGNAZIONE RISORSE
+// POST /api/aree - Crea nuova area
 router.post('/', authenticateToken, requireManager, validateArea, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -203,195 +197,64 @@ router.post('/', authenticateToken, requireManager, validateArea, async (req, re
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { 
-      nome, 
-      descrizione, 
-      progetto_id, 
-      coordinatore_id, 
-      budget_stimato, 
-      ore_stimate, 
-      scadenza,
-      risorse_assegnate  // 🆕 NUOVO CAMPO: array di {risorsa_id, ore_assegnate}
-    } = req.body;
+    const { nome, descrizione, progetto_id, coordinatore_id, budget_stimato, ore_stimate, scadenza } = req.body;
 
-    console.log('📝 Creazione area:', { nome, progetto_id, risorse_assegnate });
-
-    // ========================================
-    // 1. VERIFICA PROGETTO
-    // ========================================
-    const progettoCheck = await query(
-      'SELECT id, budget_assegnato FROM progetti WHERE id = $1', 
-      [progetto_id]
-    );
-    
+    // Verifica che il progetto esista
+    const progettoCheck = await query('SELECT id, budget_assegnato FROM progetti WHERE id = $1', [progetto_id]);
     if (progettoCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Progetto non trovato' });
     }
 
-    // ========================================
-    // 2. VERIFICA COORDINATORE (se presente)
-    // ========================================
+    // Verifica budget: somma budget aree esistenti + nuovo budget <= budget progetto
+    if (budget_stimato) {
+      const budgetCheck = await query(`
+        SELECT COALESCE(SUM(budget_stimato), 0) as budget_utilizzato
+        FROM aree
+        WHERE progetto_id = $1 AND attivo = true
+      `, [progetto_id]);
+
+      const budgetTotale = parseFloat(budgetCheck.rows[0].budget_utilizzato) + parseFloat(budget_stimato);
+      const budgetProgetto = parseFloat(progettoCheck.rows[0].budget_assegnato);
+
+      if (budgetTotale > budgetProgetto) {
+        return res.status(400).json({ 
+          error: 'Budget insufficiente',
+          details: `Budget disponibile: €${(budgetProgetto - budgetCheck.rows[0].budget_utilizzato).toFixed(2)}`
+        });
+      }
+    }
+
+    // Verifica che il coordinatore esista e abbia il ruolo giusto
     if (coordinatore_id) {
       const coordCheck = await query(
         'SELECT id, ruolo FROM utenti WHERE id = $1 AND attivo = true',
         [coordinatore_id]
       );
-      
       if (coordCheck.rows.length === 0) {
         return res.status(404).json({ error: 'Coordinatore non trovato' });
       }
-    }
-
-    // ========================================
-    // 3. GESTIONE RISORSE ASSEGNATE (NUOVO!)
-    // ========================================
-    let budgetTotaleArea = 0;
-    let oreStimateCalcolate = 0;
-    
-    if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
-      console.log('🔍 Verifica risorse assegnate:', risorse_assegnate);
-
-      // Per ogni risorsa, verifica che sia assegnata al progetto
-      for (const ris of risorse_assegnate) {
-        const { risorsa_id, ore_assegnate } = ris;
-
-        // Controlla che la risorsa sia nel progetto
-        const risorsaProgetto = await query(`
-          SELECT 
-            ap.utente_id,
-            ap.ore_assegnate as ore_progetto,
-            ap.costo_orario_finale,
-            COALESCE(
-              (SELECT SUM(aa.ore_assegnate)
-               FROM assegnazioni_area aa
-               JOIN aree a ON aa.area_id = a.id
-               WHERE a.progetto_id = ap.progetto_id 
-               AND aa.utente_id = ap.utente_id
-               AND a.attivo = true), 
-              0
-            ) as ore_gia_utilizzate,
-            u.nome as risorsa_nome
-          FROM assegnazioni_progetto ap
-          JOIN utenti u ON ap.utente_id = u.id
-          WHERE ap.progetto_id = $1 AND ap.utente_id = $2
-        `, [progetto_id, risorsa_id]);
-
-        if (risorsaProgetto.rows.length === 0) {
-          return res.status(400).json({ 
-            error: 'Risorsa non assegnata',
-            details: `La risorsa non è assegnata al progetto`
-          });
-        }
-
-        const risorsa = risorsaProgetto.rows[0];
-        const oreDisponibili = risorsa.ore_progetto - risorsa.ore_gia_utilizzate;
-
-        // Controlla che non sfori le ore disponibili
-        if (ore_assegnate > oreDisponibili) {
-          return res.status(400).json({ 
-            error: 'Ore insufficienti',
-            details: `${risorsa.risorsa_nome} ha solo ${oreDisponibili}h disponibili, richieste ${ore_assegnate}h`
-          });
-        }
-
-        // Calcola budget
-        const budgetRisorsa = ore_assegnate * risorsa.costo_orario_finale;
-        budgetTotaleArea += budgetRisorsa;
-        oreStimateCalcolate += ore_assegnate;
+      if (!['coordinatore', 'manager', 'super_admin'].includes(coordCheck.rows[0].ruolo)) {
+        return res.status(400).json({ error: 'L\'utente deve avere ruolo coordinatore, manager o super_admin' });
       }
-
-      console.log(`💰 Budget totale area calcolato: €${budgetTotaleArea.toFixed(2)}`);
-      console.log(`⏱️ Ore stimate calcolate: ${oreStimateCalcolate}h`);
     }
 
-    // ========================================
-    // 4. CREA AREA
-    // ========================================
-    const areaResult = await query(`
+    const result = await query(`
       INSERT INTO aree (
-        nome, 
-        descrizione, 
-        progetto_id, 
-        coordinatore_id, 
-        budget_stimato, 
-        budget_assegnato,
-        ore_stimate, 
-        scadenza
+        nome, descrizione, progetto_id, coordinatore_id,
+        budget_stimato, ore_stimate, scadenza
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [
-      nome, 
-      descrizione || null, 
-      progetto_id, 
-      coordinatore_id || null,
-      budget_stimato || budgetTotaleArea,  // Usa budget calcolato se non fornito
-      budgetTotaleArea,                    // 🆕 Budget assegnato dalle risorse
-      ore_stimate || oreStimateCalcolate,  // Usa ore calcolate se non fornite
-      scadenza || null
-    ]);
+    `, [nome, descrizione, progetto_id, coordinatore_id, budget_stimato || 0, ore_stimate || 0, scadenza]);
 
-    const area = areaResult.rows[0];
-    console.log('✅ Area creata:', area.id);
-
-    // ========================================
-    // 5. CREA ASSEGNAZIONI RISORSE (NUOVO!)
-    // ========================================
-    if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
-      for (const ris of risorse_assegnate) {
-        const { risorsa_id, ore_assegnate } = ris;
-
-        // Ottieni costi dalla assegnazioni_progetto
-        const costiRisorsa = await query(`
-          SELECT costo_orario_base, costo_orario_finale
-          FROM assegnazioni_progetto
-          WHERE progetto_id = $1 AND utente_id = $2
-        `, [progetto_id, risorsa_id]);
-
-        const costi = costiRisorsa.rows[0];
-        const budgetRisorsa = ore_assegnate * costi.costo_orario_finale;
-
-        // Inserisci assegnazione
-        await query(`
-          INSERT INTO assegnazioni_area (
-            area_id,
-            utente_id,
-            ore_assegnate,
-            costo_orario_base,
-            costo_orario_finale,
-            budget_risorsa
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-        `, [
-          area.id,
-          risorsa_id,
-          ore_assegnate,
-          costi.costo_orario_base,
-          costi.costo_orario_finale,
-          budgetRisorsa
-        ]);
-
-        console.log(`✅ Risorsa ${risorsa_id} assegnata: ${ore_assegnate}h, €${budgetRisorsa.toFixed(2)}`);
-      }
-    }
-
-    // ========================================
-    // 6. RISPOSTA
-    // ========================================
-    res.status(201).json({
+    res.status(201).json({ 
       message: 'Area creata con successo',
-      area: {
-        ...area,
-        numero_risorse: risorse_assegnate?.length || 0,
-        budget_assegnato: budgetTotaleArea
-      }
+      area: result.rows[0]
     });
 
   } catch (error) {
-    console.error('❌ Errore creazione area:', error);
-    res.status(500).json({ 
-      error: 'Errore nella creazione dell\'area', 
-      details: error.message 
-    });
+    console.error('Create area error:', error);
+    res.status(500).json({ error: 'Errore nella creazione dell\'area', details: error.message });
   }
 });
 

@@ -1,91 +1,129 @@
 import React, { useState, useEffect } from 'react';
-import { X, Layers, User, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { X, Layers, Plus, Trash2, Calendar, FileText, MessageSquare, Clock } from 'lucide-react';
 import api from '../utils/api';
 
 const CreateActivityModal = ({ 
   isOpen, 
   onClose, 
   areaId, 
-  areaNome, 
-  progettoId,       // AGGIUNGI QUESTO - serve per il backend
+  areaNome,
+  progettoId,
+  clienteId,
   onSuccess 
 }) => {
   const [formData, setFormData] = useState({
     nome: '',
     descrizione: '',
     ore_stimate: '',
-    scadenza: '',
-    risorse_assegnate: []
+    scadenza: ''
   });
-
-  const [risorse, setRisorse] = useState([]);
+  
+  // 🆕 STATO PER RISORSE
+  const [risorseDisponibili, setRisorseDisponibili] = useState([]);
+  const [risorseAssegnate, setRisorseAssegnate] = useState([]);
+  const [risorsaSelezionata, setRisorsaSelezionata] = useState('');
+  const [oreRisorsa, setOreRisorsa] = useState('');
+  
   const [loadingRisorse, setLoadingRisorse] = useState(false);
   const [errors, setErrors] = useState({});
-  const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form quando il modal si apre/chiude
+  // Carica risorse quando si apre il modal
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen && areaId) {
+      loadRisorseArea();
+      // Reset form
       setFormData({
         nome: '',
         descrizione: '',
         ore_stimate: '',
-        scadenza: '',
-        risorse_assegnate: []
+        scadenza: ''
       });
+      setRisorseAssegnate([]);
+      setRisorsaSelezionata('');
+      setOreRisorsa('');
       setErrors({});
-      setSubmitError('');
-      setIsSubmitting(false);
-    } else {
-      loadRisorse();
     }
-  }, [isOpen]);
+  }, [isOpen, areaId]);
 
-  // Carica lista risorse assegnate al cliente
-const loadRisorse = async () => {
-  try {
-    setLoadingRisorse(true);
-    // Carica le risorse assegnate a questo cliente dall'area selezionata
-    // Prima prendiamo l'area per risalire al progetto e quindi al cliente
-    const areaResponse = await api.get(`/aree/${areaId}`);
-    const clienteId = areaResponse.data.area.cliente_id;
-    
-    // Ora prendiamo le risorse assegnate al cliente
-    const risorseResponse = await api.get(`/client-resources/${clienteId}`);
-    const risorseList = risorseResponse.data.risorse || [];
-    
-    console.log('Risorse caricate per cliente:', clienteId, risorseList);
-    setRisorse(risorseList);
-  } catch (error) {
-    console.error('Errore caricamento risorse:', error);
-    setRisorse([]);
-  } finally {
-    setLoadingRisorse(false);
-  }
-};
-
-  // Handle input change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+  const loadRisorseArea = async () => {
+    try {
+      setLoadingRisorse(true);
+      const response = await api.get(`/activities/area-resources/${areaId}`);
+      console.log('📊 Risorse area caricate:', response.data.risorse);
+      setRisorseDisponibili(response.data.risorse || []);
+    } catch (error) {
+      console.error('Errore caricamento risorse area:', error);
+      setErrors({ risorse: 'Impossibile caricare le risorse dell\'area' });
+    } finally {
+      setLoadingRisorse(false);
     }
   };
 
-  // Handle risorse selection
-  const handleRisorsaToggle = (risorsaId) => {
-    setFormData(prev => ({
-      ...prev,
-      risorse_assegnate: prev.risorse_assegnate.includes(risorsaId)
-        ? prev.risorse_assegnate.filter(id => id !== risorsaId)
-        : [...prev.risorse_assegnate, risorsaId]
-    }));
+  // Aggiungi risorsa alla lista
+  const handleAggiungiRisorsa = () => {
+    // Validazione
+    if (!risorsaSelezionata) {
+      setErrors({ ...errors, risorsa: 'Seleziona una risorsa' });
+      return;
+    }
+    if (!oreRisorsa || parseFloat(oreRisorsa) <= 0) {
+      setErrors({ ...errors, ore: 'Inserisci ore valide (maggiori di 0)' });
+      return;
+    }
+
+    // Trova dati risorsa
+    const risorsa = risorseDisponibili.find(r => r.risorsa_id === risorsaSelezionata);
+    if (!risorsa) return;
+
+    // Verifica se già assegnata
+    if (risorseAssegnate.find(r => r.risorsa_id === risorsaSelezionata)) {
+      setErrors({ ...errors, risorsa: 'Risorsa già assegnata' });
+      return;
+    }
+
+    const ore = parseFloat(oreRisorsa);
+    const oreDisponibili = parseFloat(risorsa.ore_disponibili || 0);
+    
+    // Verifica ore disponibili
+    if (ore > oreDisponibili) {
+      setErrors({ 
+        ...errors, 
+        ore: `${risorsa.risorsa_nome} ha solo ${oreDisponibili}h disponibili nell'area` 
+      });
+      return;
+    }
+
+    const costoOrarioFinale = parseFloat(risorsa.costo_orario_finale || 0);
+    const budgetRisorsa = ore * costoOrarioFinale;
+
+    // Aggiungi alla lista
+    setRisorseAssegnate([
+      ...risorseAssegnate,
+      {
+        risorsa_id: risorsa.risorsa_id,
+        risorsa_nome: risorsa.risorsa_nome,
+        ore_assegnate: ore,
+        costo_orario_finale: costoOrarioFinale,
+        budget_risorsa: budgetRisorsa,
+        ore_disponibili: oreDisponibili
+      }
+    ]);
+
+    // Reset selezione
+    setRisorsaSelezionata('');
+    setOreRisorsa('');
+    setErrors({});
   };
+
+  // Rimuovi risorsa dalla lista
+  const handleRimuoviRisorsa = (risorsaId) => {
+    setRisorseAssegnate(risorseAssegnate.filter(r => r.risorsa_id !== risorsaId));
+  };
+
+  // Calcola budget totale attività
+  const budgetTotaleAttivita = risorseAssegnate.reduce((sum, r) => sum + r.budget_risorsa, 0);
+  const oreTotaliAssegnate = risorseAssegnate.reduce((sum, r) => sum + r.ore_assegnate, 0);
 
   // Validazione form
   const validateForm = () => {
@@ -95,11 +133,8 @@ const loadRisorse = async () => {
       newErrors.nome = 'Il nome dell\'attività è obbligatorio';
     }
 
-    if (formData.ore_stimate) {
-      const ore = parseInt(formData.ore_stimate);
-      if (isNaN(ore) || ore < 0) {
-        newErrors.ore_stimate = 'Le ore devono essere un numero positivo';
-      }
+    if (risorseAssegnate.length === 0) {
+      newErrors.risorse_assegnate = 'Devi assegnare almeno una risorsa all\'attività';
     }
 
     setErrors(newErrors);
@@ -108,56 +143,57 @@ const loadRisorse = async () => {
 
   // Submit form
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!validateForm()) return;
-  
-  setIsSubmitting(true);
-  setSubmitError('');
-  
-  try {
-    const activityData = {
-      nome: formData.nome.trim(),
-      descrizione: formData.descrizione.trim() || null,
-      progetto_id: progettoId,
-      area_id: areaId,  // 🆕 AGGIUNGI QUESTA RIGA
-      ore_stimate: formData.ore_stimate ? parseInt(formData.ore_stimate) : null,
-      scadenza: formData.scadenza || null,
-      risorse_assegnate: formData.risorse_assegnate
-    };
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const activityData = {
+        nome: formData.nome.trim(),
+        descrizione: formData.descrizione.trim() || null,
+        progetto_id: progettoId,
+        area_id: areaId,
+        ore_stimate: oreTotaliAssegnate,  // Usa ore totali assegnate
+        scadenza: formData.scadenza || null,
+        // 🆕 AGGIUNGI RISORSE ASSEGNATE
+        risorse_assegnate: risorseAssegnate.map(r => ({
+          risorsa_id: r.risorsa_id,
+          ore_assegnate: r.ore_assegnate
+        }))
+      };
 
-    console.log('Creating activity:', activityData);
-    const response = await api.post('/activities', activityData);
-    
-    console.log('Attività creata:', response.data);
-    
-    if (onSuccess) {
-      onSuccess(response.data.activity);
+      console.log('📤 Invio attività:', activityData);
+
+      const response = await api.post('/activities', activityData);
+      
+      console.log('✅ Attività creata:', response.data);
+      
+      if (onSuccess) {
+        onSuccess(response.data.attivita);
+      }
+      onClose();
+    } catch (error) {
+      console.error('❌ Errore creazione attività:', error);
+      console.error('📋 Dettagli errore completo:', error.response?.data); // ← AGGIUNGI
+      setErrors({
+        submit: error.response?.data?.details || 
+                error.response?.data?.error || 
+                'Errore durante la creazione dell\'attività'
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    onClose();
-    alert(`✅ Attività "${response.data.activity.nome}" creata con successo!`);
-
-  } catch (error) {
-    console.error('Errore creazione attività:', error);
-    console.error('Dettagli errore:', error.response?.data);
-    setSubmitError(
-      error.response?.data?.details || 
-      error.response?.data?.error || 
-      'Errore durante la creazione dell\'attività'
-    );
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
           <div className="flex items-center">
             <Layers className="w-6 h-6 text-green-600 mr-3" />
             <div>
@@ -167,162 +203,239 @@ const loadRisorse = async () => {
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             disabled={isSubmitting}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6">
-          {submitError && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0" />
-                <span className="text-red-700 text-sm">{submitError}</span>
-              </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Error Generale */}
+          {errors.submit && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800">{errors.submit}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nome Attività */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome Attività *
-              </label>
-              <input
-                type="text"
-                name="nome"
-                value={formData.nome}
-                onChange={handleInputChange}
-                className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.nome ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Es. Implementazione Login"
-                disabled={isSubmitting}
-              />
-              {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
-            </div>
-
-            {/* Descrizione */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descrizione
-              </label>
-              <textarea
-                name="descrizione"
-                value={formData.descrizione}
-                onChange={handleInputChange}
-                rows={3}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Descrizione dell'attività..."
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Ore Stimate */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Clock className="inline w-4 h-4 mr-1" />
-                Ore Stimate
-              </label>
-              <input
-                type="number"
-                name="ore_stimate"
-                value={formData.ore_stimate}
-                onChange={handleInputChange}
-                min="0"
-                className={`block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.ore_stimate ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="0"
-                disabled={isSubmitting}
-              />
-              {errors.ore_stimate && (
-                <p className="text-sm text-red-600 mt-1">{errors.ore_stimate}</p>
-              )}
-            </div>
-
-            {/* Scadenza */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="inline w-4 h-4 mr-1" />
-                Scadenza
-              </label>
-              <input
-                type="datetime-local"
-                name="scadenza"
-                value={formData.scadenza}
-                onChange={handleInputChange}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Risorse da Assegnare */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <User className="inline w-4 h-4 mr-1" />
-                Risorse da Assegnare
-              </label>
-              {loadingRisorse ? (
-                <div className="flex items-center px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
-                  <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin mr-2" />
-                  <span className="text-gray-500">Caricamento risorse...</span>
+          {/* Dati Base Attività */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Informazioni Attività</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Nome Attività */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nome Attività *
+                </label>
+                <div className="relative">
+                  <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                      errors.nome ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Es. Implementazione Login"
+                  />
                 </div>
-              ) : (
-                <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto">
-                  {risorse.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nessuna risorsa disponibile</p>
-                  ) : (
-                    risorse.map(risorsa => (
-  <label key={risorsa.risorsa_id} className="flex items-center py-2 hover:bg-gray-50 cursor-pointer">
-    <input
-      type="checkbox"
-      checked={formData.risorse_assegnate.includes(risorsa.risorsa_id)}
-      onChange={() => handleRisorsaToggle(risorsa.risorsa_id)}
-      className="mr-2 w-4 h-4 text-green-600 rounded focus:ring-green-500"
-      disabled={isSubmitting}
-    />
-    <span className="text-sm text-gray-700">
-      {risorsa.risorsa_nome}
-    </span>
-  </label>
-))
-                  )}
+                {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
+              </div>
+
+              {/* Descrizione */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Descrizione
+                </label>
+                <div className="relative">
+                  <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                  <textarea
+                    value={formData.descrizione}
+                    onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
+                    rows={3}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Descrizione dell'attività..."
+                  />
                 </div>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.risorse_assegnate.length} risorsa/e selezionata/e
-              </p>
+              </div>
+
+              {/* Scadenza */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-1" />
+                  Scadenza
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.scadenza}
+                  onChange={(e) => setFormData({ ...formData, scadenza: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+          {/* Assegnazione Risorse */}
+          <div className="space-y-4 border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900">Assegna Risorse all'Attività *</h3>
+            
+            {loadingRisorse ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                <span className="ml-2 text-gray-600">Caricamento risorse...</span>
+              </div>
+            ) : risorseDisponibili.length === 0 ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  Nessuna risorsa assegnata a questa area. Assegna risorse all'area prima di creare un'attività.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Selezione Risorsa */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  <div className="md:col-span-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Seleziona Risorsa
+                    </label>
+                    <select
+                      value={risorsaSelezionata}
+                      onChange={(e) => setRisorsaSelezionata(e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                        errors.risorsa ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    >
+                      <option value="">-- Seleziona risorsa --</option>
+                      {risorseDisponibili
+                        .filter(r => !risorseAssegnate.find(ra => ra.risorsa_id === r.risorsa_id))
+                        .map(risorsa => (
+                          <option key={risorsa.risorsa_id} value={risorsa.risorsa_id}>
+                            {risorsa.risorsa_nome} ({parseFloat(risorsa.ore_disponibili || 0).toFixed(1)}h disponibili)
+                          </option>
+                        ))}
+                    </select>
+                    {errors.risorsa && <p className="mt-1 text-sm text-red-600">{errors.risorsa}</p>}
+                  </div>
+
+                  <div className="md:col-span-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Ore da Assegnare
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={oreRisorsa}
+                      onChange={(e) => setOreRisorsa(e.target.value)}
+                      placeholder="Es. 10.5"
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                        errors.ore ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {errors.ore && <p className="mt-1 text-sm text-red-600">{errors.ore}</p>}
+                  </div>
+
+                  <div className="md:col-span-3 flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleAggiungiRisorsa}
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
+                               transition-colors flex items-center justify-center"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Aggiungi
+                    </button>
+                  </div>
+                </div>
+
+                {/* Lista Risorse Assegnate */}
+                {risorseAssegnate.length > 0 && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Risorse Assegnate ({risorseAssegnate.length})
+                    </label>
+                    <div className="space-y-2">
+                      {risorseAssegnate.map(risorsa => (
+                        <div
+                          key={risorsa.risorsa_id}
+                          className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{risorsa.risorsa_nome}</p>
+                            <p className="text-sm text-gray-600">
+                              {risorsa.ore_assegnate}h × €{risorsa.costo_orario_finale.toFixed(2)}/h = 
+                              <span className="font-semibold text-green-600 ml-1">
+                                €{risorsa.budget_risorsa.toFixed(2)}
+                              </span>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRimuoviRisorsa(risorsa.risorsa_id)}
+                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Budget Totale */}
+                    <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-300 rounded-lg">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-sm text-gray-600">Ore Totali:</span>
+                          <span className="ml-2 text-lg font-bold text-gray-900">
+                            {oreTotaliAssegnate.toFixed(1)}h
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-gray-600">Budget Totale:</span>
+                          <span className="ml-2 text-lg font-bold text-green-600">
+                            €{budgetTotaleAttivita.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {errors.risorse_assegnate && (
+                  <p className="text-sm text-red-600">{errors.risorse_assegnate}</p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={isSubmitting}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg 
+                       hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Annulla
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                       transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed
-                       flex items-center"
+              disabled={isSubmitting || risorseAssegnate.length === 0}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
+                       transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Creazione...
+                  Creando...
                 </>
               ) : (
-                'Crea Attività'
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crea Attività
+                </>
               )}
             </button>
           </div>

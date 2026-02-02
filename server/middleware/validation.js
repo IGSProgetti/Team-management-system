@@ -74,6 +74,7 @@ const validateProject = [
     .isUUID()
     .withMessage('Valid client ID required'),
   body('budget_assegnato')
+    .optional()  // 🆕 ORA È OPZIONALE (calcolato dalle risorse)
     .isNumeric()
     .isFloat({ min: 0 })
     .withMessage('Assigned budget must be a positive number'),
@@ -90,6 +91,19 @@ const validateProject = [
     .optional()
     .isISO8601()
     .withMessage('End date must be valid ISO date'),
+  // 🆕 AGGIUNGI VALIDAZIONE RISORSE ASSEGNATE
+  body('risorse_assegnate')
+    .optional()
+    .isArray()
+    .withMessage('risorse_assegnate must be an array'),
+  body('risorse_assegnate.*.risorsa_id')
+    .optional()
+    .isUUID()
+    .withMessage('Each resource must have a valid risorsa_id (UUID)'),
+  body('risorse_assegnate.*.ore_assegnate')
+    .optional()
+    .isFloat({ min: 0.1 })
+    .withMessage('Each resource must have valid ore_assegnate (> 0)'),
   handleValidationErrors
 ];
 

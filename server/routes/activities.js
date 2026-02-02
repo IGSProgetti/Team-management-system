@@ -58,6 +58,8 @@ const result = await query(`
     a.ore_stimate, 
     a.scadenza, 
     a.stato,
+    a.budget_assegnato,       
+    a.budget_utilizzato,
     a.data_creazione, 
     a.data_aggiornamento,
     
@@ -126,7 +128,8 @@ COALESCE(ROUND(SUM(
   LEFT JOIN utenti u ON t.utente_assegnato = u.id
   LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
   ${whereClause}
-  GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato,
+  GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato, a.budget_assegnato, 
+           a.budget_utilizzato,
            a.data_creazione, a.data_aggiornamento,
            p.nome, p.id, c.nome, c.id
   ORDER BY 
@@ -157,60 +160,258 @@ COALESCE(ROUND(SUM(
   }
 });
 
-// POST /api/activities - Crea nuova attività
-router.post('/', authenticateToken, requireResource, validateActivity, async (req, res) => {
+// POST /api/activities - Crea nuova attività CON ASSEGNAZIONE RISORSE
+router.post('/', authenticateToken, requireResource, async (req, res) => {
   try {
-    const { nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, risorse_assegnate } = req.body; // <-- AGGIUNGI area_id
+    const { 
+      nome, 
+      descrizione, 
+      progetto_id,
+      area_id,
+      ore_stimate, 
+      scadenza,
+      risorse_assegnate  // 🆕 NUOVO: array di {risorsa_id, ore_assegnate}
+    } = req.body;
+
+    console.log('📝 Creazione attività:', { nome, area_id, risorse_assegnate });
 
     await transaction(async (client) => {
-      // Verifica permessi sul progetto
-      const projectCheck = await client.query(`
-  SELECT p.id, p.stato_approvazione 
-  FROM progetti p
-  WHERE p.id = $1 AND (
-    p.stato_approvazione = 'approvata' OR 
-    $2 = 'manager' OR 
-    p.creato_da = $3
-  )
-`, [progetto_id, req.user.ruolo, req.user.id]);
-
-      if (projectCheck.rows.length === 0) {
-        throw new Error('Project not found or access denied');
+      // ========================================
+      // 1. VERIFICA AREA
+      // ========================================
+      const areaCheck = await client.query(
+        'SELECT id, budget_assegnato FROM aree WHERE id = $1 AND attivo = true', 
+        [area_id]
+      );
+      
+      if (areaCheck.rows.length === 0) {
+        throw new Error('Area non trovata');
       }
 
-// Crea attività
-const activityResult = await client.query(`
-  INSERT INTO attivita (nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, creata_da)
-  VALUES ($1, $2, $3, $4, $5, $6, $7)
-  RETURNING *
-`, [nome, descrizione, progetto_id, area_id, ore_stimate, scadenza, req.user.id]);
+      // ========================================
+      // 2. GESTIONE RISORSE ASSEGNATE (NUOVO!)
+      // ========================================
+      let budgetTotaleAttivita = 0;
+      let oreStimateCalcolate = 0;
+      
+      if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
+        console.log('🔍 Verifica risorse assegnate:', risorse_assegnate);
 
-      const activity = activityResult.rows[0];
+        // Per ogni risorsa, verifica che sia assegnata all'area
+        for (const ris of risorse_assegnate) {
+          const { risorsa_id, ore_assegnate } = ris;
 
-      // Assegna risorse all'attività
-      const assignments = [];
-      for (const utente_id of risorse_assegnate) {
-        const assignmentResult = await client.query(`
-          INSERT INTO assegnazioni_attivita (attivita_id, utente_id)
-          VALUES ($1, $2)
-          RETURNING *
-        `, [activity.id, utente_id]);
+          // Controlla che la risorsa sia nell'area
+          const risorsaArea = await client.query(`
+            SELECT 
+              aa.utente_id,
+              aa.ore_assegnate as ore_area,
+              aa.costo_orario_finale,
+              COALESCE(
+                (SELECT SUM(aat.ore_assegnate)
+                 FROM assegnazioni_attivita aat
+                 JOIN attivita att ON aat.attivita_id = att.id
+                 WHERE att.area_id = aa.area_id 
+                 AND aat.utente_id = aa.utente_id
+                 AND att.attivo = true), 
+                0
+              ) as ore_gia_utilizzate,
+              u.nome as risorsa_nome
+            FROM assegnazioni_area aa
+            JOIN utenti u ON aa.utente_id = u.id
+            WHERE aa.area_id = $1 AND aa.utente_id = $2
+          `, [area_id, risorsa_id]);
 
-        assignments.push(assignmentResult.rows[0]);
+          if (risorsaArea.rows.length === 0) {
+            throw new Error('Risorsa non assegnata a questa area');
+          }
+
+          const risorsa = risorsaArea.rows[0];
+          const oreDisponibili = risorsa.ore_area - risorsa.ore_gia_utilizzate;
+
+          // Controlla che non sfori le ore disponibili
+          if (ore_assegnate > oreDisponibili) {
+            throw new Error(
+              `${risorsa.risorsa_nome} ha solo ${oreDisponibili}h disponibili, richieste ${ore_assegnate}h`
+            );
+          }
+
+          // Calcola budget
+          const budgetRisorsa = ore_assegnate * risorsa.costo_orario_finale;
+          budgetTotaleAttivita += budgetRisorsa;
+          oreStimateCalcolate += ore_assegnate;
+        }
+
+        console.log(`💰 Budget totale attività calcolato: €${budgetTotaleAttivita.toFixed(2)}`);
+        console.log(`⏱️ Ore stimate calcolate: ${oreStimateCalcolate}h`);
       }
 
+      // ========================================
+      // 3. CREA ATTIVITÀ
+      // ========================================
+      const attivitaResult = await client.query(`
+        INSERT INTO attivita (
+          nome, 
+          descrizione, 
+          progetto_id, 
+          area_id,
+          ore_stimate, 
+          budget_assegnato,
+          scadenza,
+          creata_da
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `, [
+        nome, 
+        descrizione || null, 
+        progetto_id,
+        area_id, 
+        ore_stimate || oreStimateCalcolate,
+        budgetTotaleAttivita,
+        scadenza || null,
+        req.user.id
+      ]);
+
+      const attivita = attivitaResult.rows[0];
+      console.log('✅ Attività creata:', attivita.id);
+
+      // ========================================
+      // 4. CREA ASSEGNAZIONI RISORSE (NUOVO!)
+      // ========================================
+      if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
+        for (const ris of risorse_assegnate) {
+          const { risorsa_id, ore_assegnate } = ris;
+
+          // Ottieni costi dalla assegnazioni_area
+          const costiRisorsa = await client.query(`
+            SELECT costo_orario_base, costo_orario_finale
+            FROM assegnazioni_area
+            WHERE area_id = $1 AND utente_id = $2
+          `, [area_id, risorsa_id]);
+
+          const costi = costiRisorsa.rows[0];
+          const budgetRisorsa = ore_assegnate * costi.costo_orario_finale;
+
+          // Inserisci assegnazione
+          await client.query(`
+            INSERT INTO assegnazioni_attivita (
+              attivita_id,
+              utente_id,
+              ore_assegnate,
+              costo_orario_base,
+              costo_orario_finale,
+              budget_risorsa
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+          `, [
+            attivita.id,
+            risorsa_id,
+            ore_assegnate,
+            costi.costo_orario_base,
+            costi.costo_orario_finale,
+            budgetRisorsa
+          ]);
+
+          console.log(`✅ Risorsa ${risorsa_id} assegnata: ${ore_assegnate}h, €${budgetRisorsa.toFixed(2)}`);
+        }
+      }
+
+      // ========================================
+      // 5. RISPOSTA
+      // ========================================
       res.status(201).json({
-        message: 'Activity created successfully',
-        activity: {
-          ...activity,
-          risorse_assegnate: assignments
+        message: 'Attività creata con successo',
+        attivita: {
+          ...attivita,
+          numero_risorse: risorse_assegnate?.length || 0,
+          budget_assegnato: budgetTotaleAttivita
         }
       });
     });
 
   } catch (error) {
-    console.error('Create activity error:', error);
-    res.status(500).json({ error: 'Server Error', details: error.message || 'Failed to create activity' });
+    console.error('❌ Errore creazione attività:', error);
+    res.status(500).json({ 
+      error: 'Errore nella creazione dell\'attività', 
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/activities/area-resources/:area_id - Ottiene risorse assegnate a un'area
+router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
+  try {
+    const { area_id } = req.params;
+
+    console.log('📊 Caricamento risorse area:', area_id);
+
+    // Verifica che l'area esista
+    const areaCheck = await query('SELECT id, nome, progetto_id FROM aree WHERE id = $1', [area_id]);
+    if (areaCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Area non trovata' });
+    }
+
+    const area = areaCheck.rows[0];
+
+    // Ottieni risorse assegnate all'area
+    const result = await query(`
+      SELECT 
+        aa.id as assegnazione_id,
+        aa.area_id,
+        aa.utente_id as risorsa_id,
+        u.nome as risorsa_nome,
+        u.email as risorsa_email,
+        aa.ore_assegnate,
+        aa.costo_orario_base,
+        aa.costo_orario_finale,
+        aa.budget_risorsa,
+        aa.data_assegnazione,
+        
+        -- Calcola ore già utilizzate in attività
+        COALESCE(
+          (SELECT SUM(aat.ore_assegnate)
+           FROM assegnazioni_attivita aat
+           JOIN attivita att ON aat.attivita_id = att.id
+           WHERE att.area_id = aa.area_id 
+           AND aat.utente_id = aa.utente_id
+           AND att.attivo = true), 
+          0
+        ) as ore_utilizzate_attivita,
+        
+        -- Calcola ore disponibili
+        aa.ore_assegnate - COALESCE(
+          (SELECT SUM(aat.ore_assegnate)
+           FROM assegnazioni_attivita aat
+           JOIN attivita att ON aat.attivita_id = att.id
+           WHERE att.area_id = aa.area_id 
+           AND aat.utente_id = aa.utente_id
+           AND att.attivo = true), 
+          0
+        ) as ore_disponibili
+        
+      FROM assegnazioni_area aa
+      JOIN utenti u ON aa.utente_id = u.id
+      WHERE aa.area_id = $1
+      ORDER BY u.nome ASC
+    `, [area_id]);
+
+    console.log(`✅ Trovate ${result.rows.length} risorse per area ${area_id}`);
+
+    res.json({ 
+      risorse: result.rows,
+      area: {
+        id: area.id,
+        nome: area.nome,
+        progetto_id: area.progetto_id
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Errore caricamento risorse area:', error);
+    res.status(500).json({ 
+      error: 'Errore nel caricamento delle risorse dell\'area', 
+      details: error.message 
+    });
   }
 });
 

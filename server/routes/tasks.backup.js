@@ -49,46 +49,40 @@ if (stato && stato !== 'all') {
   SELECT 
     t.id, t.nome, t.descrizione, t.ore_stimate, t.ore_effettive,
     t.scadenza, t.stato, t.utente_assegnato, t.data_creazione, t.data_aggiornamento,
+    
     -- Attività info
-    a.nome as attivita_nome, a.id as attivita_id,
-        -- Progetto e cliente info
-        p.nome as progetto_nome, p.id as progetto_id,
-        c.nome as cliente_nome,
-        -- Utente assegnato
-        u.nome as utente_nome, u.email as utente_email, u.costo_orario,
-        -- Task collegata info
-        tc.nome as task_collegata_nome, tc.id as task_collegata_id,
-        tm.nome as task_madre_nome, tm.id as task_madre_id,
-        -- Performance calcoli
-        CASE 
-          WHEN t.ore_effettive IS NOT NULL AND t.ore_stimate > 0 THEN 
-            ROUND(((t.ore_effettive - t.ore_stimate)::decimal / t.ore_stimate) * 100, 1)
-          ELSE NULL 
-        END as scostamento_percentuale,
-        -- Costo effettivo task
-        CASE 
-          WHEN t.ore_effettive IS NOT NULL AND t.stato = 'completata' THEN 
-            ROUND((t.ore_effettive::decimal / 60) * u.costo_orario, 2)
-          ELSE NULL 
-        END as costo_effettivo,
-        -- Status indicators
-        CASE 
-          WHEN t.scadenza < CURRENT_TIMESTAMP AND t.stato != 'completata' THEN true 
-          ELSE false 
-        END as in_ritardo
-      FROM task t
-      JOIN attivita a ON t.attivita_id = a.id
-      JOIN progetti p ON a.progetto_id = p.id
-      JOIN clienti c ON p.cliente_id = c.id
-      JOIN utenti u ON t.utente_assegnato = u.id
-      LEFT JOIN task tc ON t.task_collegata_id = tc.id
-      LEFT JOIN task tm ON t.task_madre_id = tm.id
-      ${whereClause}
-      ORDER BY 
-        CASE WHEN t.stato = 'in_esecuzione' THEN 1 
-             WHEN t.stato = 'programmata' THEN 2 
-             ELSE 3 END,
-        t.scadenza ASC
+    a.nome as attivita_nome, 
+    a.id as attivita_id,
+    
+    -- Progetto info
+    p.nome as progetto_nome, 
+    p.id as progetto_id,
+    
+    -- Cliente info  
+    c.nome as cliente_nome, 
+    c.id as cliente_id,
+    
+    -- Utente assegnato info
+    u.nome as utente_nome, 
+    u.email as utente_email,
+    
+    -- COSTO ORARIO FINALE (da assegnazione_cliente_risorsa)
+    COALESCE(acr.costo_orario_finale, u.costo_orario, 0) as costo_orario_finale,
+    
+    -- BUDGET PREVENTIVATO = ore_stimate × costo_orario_finale  
+    ROUND((t.ore_stimate / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0), 2) as budget_preventivato,
+    
+    -- BUDGET EFFETTIVO = ore_effettive × costo_orario_finale
+    ROUND((COALESCE(t.ore_effettive, 0) / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0), 2) as budget_effettivo
+    
+  FROM task t
+  JOIN attivita a ON t.attivita_id = a.id
+  JOIN progetti p ON a.progetto_id = p.id  
+  JOIN clienti c ON p.cliente_id = c.id
+  LEFT JOIN utenti u ON t.utente_assegnato = u.id
+  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
+  ${whereClause}
+  ORDER BY t.scadenza ASC, t.data_creazione DESC
     `, params);
 
     res.json({ 

@@ -130,8 +130,8 @@ const ProjectCard = ({ project, onClick }) => {
 // ============================================
 const AreaCard = ({ area, onClick }) => {
   // Calcola percentuali
-  const budgetPreventivato = parseFloat(area.budget_preventivato || 0);
-  const budgetEffettivo = parseFloat(area.budget_effettivo || 0);
+  const budgetPreventivato = parseFloat(area.budget_assegnato || 0);  // ✅ CAMBIATO
+  const budgetEffettivo = parseFloat(area.budget_utilizzato || 0);    // ✅ CAMBIATO
   const percentualeBudget = budgetPreventivato > 0 
     ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
     : 0;
@@ -218,8 +218,8 @@ const AreaCard = ({ area, onClick }) => {
 // ============================================
 const ActivityCard = ({ activity, onClick }) => {
   // Calcola percentuali
-  const budgetPreventivato = parseFloat(activity.budget_preventivato || 0);
-  const budgetEffettivo = parseFloat(activity.budget_effettivo || 0);
+  const budgetPreventivato = parseFloat(activity.budget_assegnato || 0);  // ✅ CAMBIATO
+  const budgetEffettivo = parseFloat(activity.budget_utilizzato || 0);    // ✅ CAMBIATO
   const percentualeBudget = budgetPreventivato > 0 
     ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
     : 0;

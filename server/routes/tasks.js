@@ -406,6 +406,43 @@ router.put('/:id/complete', authenticateToken, validateUUID('id'), validateTaskC
 
       const task = result.rows[0];
 
+// 💰 AGGIORNA BUDGET UTILIZZATO ATTIVITÀ
+console.log('💰 Aggiornamento budget_utilizzato attività...');
+
+// Ottieni costo orario finale della risorsa
+const budgetTaskResult = await client.query(`
+  SELECT 
+    t.ore_effettive,
+    COALESCE(acr.costo_orario_finale, u.costo_orario, 0) as costo_orario_finale,
+    t.attivita_id,
+    c.id as cliente_id
+  FROM task t
+  JOIN attivita a ON t.attivita_id = a.id
+  JOIN progetti p ON a.progetto_id = p.id
+  JOIN clienti c ON p.cliente_id = c.id
+  JOIN utenti u ON t.utente_assegnato = u.id
+  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
+  WHERE t.id = $1
+`, [id]);
+
+if (budgetTaskResult.rows.length > 0) {
+  const { ore_effettive, costo_orario_finale, attivita_id } = budgetTaskResult.rows[0];
+  const budgetTask = (ore_effettive / 60.0) * costo_orario_finale;
+  
+  console.log(`  Ore effettive: ${ore_effettive} min`);
+  console.log(`  Costo orario: €${costo_orario_finale}/h`);
+  console.log(`  Budget task: €${budgetTask.toFixed(2)}`);
+
+  // Aggiorna budget_utilizzato dell'attività
+  await client.query(`
+    UPDATE attivita 
+    SET budget_utilizzato = COALESCE(budget_utilizzato, 0) + $1
+    WHERE id = $2
+  `, [budgetTask, attivita_id]);
+
+  console.log(`✅ Budget attività aggiornato: +€${budgetTask.toFixed(2)}`);
+}
+
       // 🚀 AUTO-CREAZIONE TASK COLLEGATA CON CONFIGURAZIONE COMPLETA
       if (task.task_collegata_config) {
         console.log('🔗 Trovata configurazione task collegata, avvio creazione automatica...');
