@@ -39,3 +39,7 @@ export default {
   Avatar,
   NotificationDropdown
 };
+
+export { default as BudgetControlDashboard } from './BudgetControlDashboard';
+export { default as AssegnaOreModal } from './AssegnaOreModal';
+export { default as CalcolaMarginiModal } from './CalcolaMarginiModal';

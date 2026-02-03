@@ -179,6 +179,42 @@ router.get('/:id', bypassAuth, validateUUID('id'), async (req, res) => {
   }
 });
 
+// GET /api/clients/:id/resources - Ottieni risorse assegnate al cliente
+router.get('/:id/resources', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await query(`
+      SELECT 
+        acr.id as assegnazione_id,
+        acr.risorsa_id,
+        u.id,
+        u.nome,
+        u.email,
+        u.ruolo,
+        acr.ore_assegnate,
+        acr.costo_orario_base
+      FROM assegnazione_cliente_risorsa acr
+      JOIN utenti u ON acr.risorsa_id = u.id
+      WHERE acr.cliente_id = $1
+        AND u.attivo = true
+      ORDER BY u.nome
+    `, [id]);
+
+    res.json({
+      success: true,
+      resources: result.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching client resources:', error);
+    res.status(500).json({ 
+      error: 'Errore nel caricamento risorse cliente',
+      details: error.message 
+    });
+  }
+});
+
 // ============================================
 // DELETE /api/clients/:id - Elimina cliente e TUTTO il cascade
 // ============================================
@@ -337,6 +373,7 @@ await client.query(`
   }
 });
 
-module.exports = router;
+
+
 
 module.exports = router;
