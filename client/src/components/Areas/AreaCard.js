@@ -136,7 +136,7 @@ const AreaCard = ({
               <span className="text-xs font-medium">Ore</span>
             </div>
             <div className="text-lg font-bold text-green-900">
-              {area.ore_effettive || 0}/{area.ore_stimate || 0}h
+              {area.ore_effettive_calcolate || 0}/{area.ore_stimate || 0}h
             </div>
           </div>
 

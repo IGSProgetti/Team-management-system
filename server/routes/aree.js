@@ -114,6 +114,14 @@ COALESCE(ROUND(SUM(
   THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, ut.costo_orario, 0)
   ELSE 0 END
 ), 2), 0) as budget_effettivo,
+
+-- ⏰ ORE EFFETTIVE AREA CALCOLATE (somma ore effettive task completate)
+COALESCE(SUM(
+  CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
+    ${risorsa_id ? `AND t.utente_assegnato = $${params.indexOf(risorsa_id) + 1}` : ''}
+  THEN t.ore_effettive / 60.0
+  ELSE 0 END
+), 0) as ore_effettive_calcolate,
     
     -- Percentuale completamento
     CASE 

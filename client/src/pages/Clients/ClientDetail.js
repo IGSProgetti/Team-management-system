@@ -17,111 +17,92 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import ClientResourceAssignment from '../../components/ClientResourceAssignment';
+import ProjectDrillDownModal from '../../components/ProjectDrillDownModal';
 
 // ============================================
 // COMPONENTE: ProjectCard - Card Progetto Clickabile
 // ============================================
 const ProjectCard = ({ project, onClick }) => {
   const budgetTotale = parseFloat(project.budget_assegnato || 0);
-  const budgetUtilizzato = parseFloat(project.budget_utilizzato || 0);
+  const budgetUtilizzato = parseFloat(project.budget_effettivo || 0); // ✅ CORRETTO
   const budgetDisponibile = budgetTotale - budgetUtilizzato;
   const percentualeUtilizzo = budgetTotale > 0 ? (budgetUtilizzato / budgetTotale) * 100 : 0;
+  
+  // Calcola percentuale ore - ore_totali_utilizzate è in MINUTI
+  const oreUtilizzate = parseFloat(project.ore_totali_utilizzate || 0) / 60; // ✅ Converti minuti in ore
+  const oreAssegnate = parseFloat(project.ore_totali_assegnate || 0);
+  const percentualeOre = oreAssegnate > 0 ? (oreUtilizzate / oreAssegnate) * 100 : 0;
 
-  const getStatusBadge = (stato) => {
-    const config = {
-      approvata: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approvato' },
-      pending_approval: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'In Attesa' },
-      rifiutata: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rifiutato' }
-    };
-    const s = config[stato] || config.pending_approval;
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
-        {s.label}
-      </span>
-    );
+  // Determina colore budget
+  const getBudgetColor = () => {
+    if (budgetUtilizzato > budgetTotale) return 'bg-red-500'; // Sforato
+    if (percentualeUtilizzo > 80) return 'bg-orange-500'; // Attenzione
+    return 'bg-green-500'; // Ok
   };
 
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md 
-                 transition-all cursor-pointer group hover:border-blue-300"
+      className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 
+                 hover:shadow-md transition-all cursor-pointer group"
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
-            <FolderOpen className="w-5 h-5 text-blue-600 flex-shrink-0" />
-            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 
-                           transition-colors line-clamp-1">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <FolderOpen className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">
               {project.nome}
-            </h3>
+            </h4>
+            {project.descrizione && (
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                {project.descrizione}
+              </p>
+            )}
           </div>
-          {getStatusBadge(project.stato_approvazione)}
         </div>
       </div>
 
-      {/* Descrizione */}
-      {project.descrizione && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-          {project.descrizione}
-        </p>
-      )}
-
-      {/* Metriche */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="space-y-1">
-          <p className="text-xs text-gray-500">Budget Totale</p>
-          <p className="text-lg font-bold text-gray-900">
-            €{budgetTotale.toLocaleString('it-IT')}
-          </p>
+      {/* Barra Budget */}
+      <div className="mb-3">
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs text-gray-600">Budget</span>
+          <span className="text-xs font-medium text-gray-900">
+            €{budgetUtilizzato.toLocaleString('it-IT', {maximumFractionDigits: 0})} / €{budgetTotale.toLocaleString('it-IT', {maximumFractionDigits: 0})}
+          </span>
         </div>
-        <div className="space-y-1">
-          <p className="text-xs text-gray-500">Disponibile</p>
-          <p className="text-lg font-bold text-green-600">
-            €{budgetDisponibile.toLocaleString('it-IT')}
-          </p>
+        <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div 
+            className={`h-1.5 rounded-full transition-all duration-300 ${getBudgetColor()}`}
+            style={{ width: `${Math.min(100, percentualeUtilizzo)}%` }}
+          />
         </div>
       </div>
 
-      {/* Progress Bar */}
-      {budgetTotale > 0 && (
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-gray-600 mb-1">
-            <span>Utilizzo Budget</span>
-            <span className="font-medium">{percentualeUtilizzo.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all ${
-                percentualeUtilizzo >= 90 ? 'bg-red-500' :
-                percentualeUtilizzo > 70 ? 'bg-yellow-500' : 'bg-blue-500'
-              }`}
-              style={{ width: `${Math.min(percentualeUtilizzo, 100)}%` }}
-            />
-          </div>
+      {/* Barra Ore */}
+      <div className="mb-3">
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs text-gray-600">Ore</span>
+          <span className="text-xs font-medium text-gray-900">
+            {oreUtilizzate.toFixed(0)}h
+          </span>
         </div>
-      )}
+        <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div 
+            className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
+            style={{ width: `${Math.min(100, percentualeOre)}%` }}
+          />
+        </div>
+      </div>
 
-      {/* Date e Info */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-sm">
+      {/* Footer */}
+      <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-100">
         <div className="flex items-center text-gray-500">
-          <Calendar className="w-4 h-4 mr-2" />
-          {project.data_inizio && new Date(project.data_inizio).toLocaleDateString('it-IT')}
+          <Building2 className="w-4 h-4 mr-1" />
+          <span>{project.numero_aree || 0} aree</span>
         </div>
-        {project.numero_aree !== undefined && (
-          <div className="flex items-center text-gray-600">
-            <Building2 className="w-4 h-4 mr-1" />
-            <span className="font-medium">{project.numero_aree}</span>
-            <span className="ml-1">aree</span>
-          </div>
-        )}
-      </div>
-
-      {/* Click Indicator */}
-      <div className="mt-3 text-center">
         <span className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">
-          Click per vedere le aree →
+          Click per aree →
         </span>
       </div>
     </div>
@@ -582,6 +563,8 @@ const ClientDetail = () => {
   const [loadingProgetti, setLoadingProgetti] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDrillDownModal, setShowProjectDrillDownModal] = useState(false);
 
   useEffect(() => {
     loadCliente();
@@ -614,9 +597,11 @@ const ClientDetail = () => {
     }
   };
 
-  const handleProjectClick = (progettoId) => {
-    navigate(`/projects/${progettoId}`);
-  };
+  const handleProjectClick = (progetto) => {
+     console.log('🔍 Progetto selezionato:', progetto);
+     setSelectedProject(progetto);
+     setShowProjectDrillDownModal(true);
+   };
 
   const handleCreateProjectSuccess = () => {
   loadProgetti();
@@ -871,7 +856,7 @@ const handleDeleteCliente = async () => {
               <ProjectCard
                 key={progetto.id}
                 project={progetto}
-                onClick={() => handleProjectClick(progetto.id)}
+                onClick={() => handleProjectClick(progetto)}
               />
             ))}
           </div>
@@ -894,6 +879,19 @@ const handleDeleteCliente = async () => {
   budgetDisponibile={budgetDisponibile}  
   onSuccess={handleCreateProjectSuccess}
 />
+
+{/* Modal Drill-Down Progetto */}
+   <ProjectDrillDownModal
+     isOpen={showProjectDrillDownModal}
+     onClose={() => {
+       setShowProjectDrillDownModal(false);
+       setSelectedProject(null);
+     }}
+     progetto={selectedProject}
+     clienteId={id}
+     clienteNome={cliente?.nome}
+   />
+
     </div>
   );
 };
