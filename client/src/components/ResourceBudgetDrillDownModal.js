@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, ChevronDown, ChevronRight, Building2, FolderKanban, 
   ListTodo, CheckSquare, Clock, DollarSign, TrendingUp, 
-  TrendingDown, AlertCircle, Layers
+  TrendingDown, AlertCircle, Layers, Gift, Minus
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -21,18 +21,18 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
   }, [risorsa.id]);
 
   const fetchDrillDown = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/budget-control-resources/${risorsa.id}/drill-down`);
-      setGerarchia(response.data.gerarchia);
-      setError(null);
-    } catch (err) {
-      console.error('Errore caricamento drill-down:', err);
-      setError('Impossibile caricare i dettagli della risorsa');
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const response = await api.get(`/bonus/resource/${risorsa.id}`);
+    setGerarchia(response.data.hierarchy); // ← Cambiato da .gerarchia a .hierarchy
+    setError(null);
+  } catch (err) {
+    console.error('Errore caricamento drill-down:', err);
+    setError('Impossibile caricare i dettagli della risorsa');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Toggle expand
   const toggleClient = (clientId) => {
@@ -214,56 +214,86 @@ const ClienteSection = ({
   formatHours,
   getStatusColor,
   getDiffColor
-}) => (
-  <div className="border border-gray-200 rounded-lg overflow-hidden">
-    <button
-      onClick={onToggle}
-      className="w-full bg-gray-50 hover:bg-gray-100 transition-colors px-4 py-3 flex items-center justify-between"
-    >
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-100 rounded-lg">
-          <Building2 className="w-5 h-5 text-blue-600" />
-        </div>
-        <div className="text-left">
-          <h3 className="font-semibold text-gray-900">{cliente.nome}</h3>
-          <p className="text-sm text-gray-500">Budget: {formatCurrency(cliente.budget)}</p>
-        </div>
-      </div>
-      {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-    </button>
-
-    <AnimatePresence>
-      {expanded && (
-        <motion.div
-          initial={{ height: 0 }}
-          animate={{ height: 'auto' }}
-          exit={{ height: 0 }}
-          className="overflow-hidden"
-        >
-          <div className="p-4 space-y-3">
-            {cliente.progetti.map(progetto => (
-              <ProgettoSection
-                key={progetto.id}
-                progetto={progetto}
-                expanded={expandedProjects[progetto.id]}
-                onToggle={() => toggleProject(progetto.id)}
-                expandedAreas={expandedAreas}
-                toggleArea={toggleArea}
-                expandedActivities={expandedActivities}
-                toggleActivity={toggleActivity}
-                formatCurrency={formatCurrency}
-                formatHours={formatHours}
-                getStatusColor={getStatusColor}
-                getDiffColor={getDiffColor}
-              />
-            ))}
+}) => {
+  
+  // Calcola totali ore preventivate e effettive
+  const totalOrePreventivate = cliente.progetti.reduce((sum, prog) => 
+    sum + prog.aree.reduce((aSum, area) => 
+      aSum + area.attivita.reduce((attSum, att) => 
+        attSum + att.tasks.reduce((tSum, task) => tSum + (task.ore_stimate || 0), 0)
+      , 0)
+    , 0)
+  , 0);
+  
+  const totalOreEffettive = cliente.progetti.reduce((sum, prog) => 
+    sum + prog.aree.reduce((aSum, area) => 
+      aSum + area.attivita.reduce((attSum, att) => 
+        attSum + att.tasks.reduce((tSum, task) => tSum + (task.ore_effettive || 0), 0)
+      , 0)
+    , 0)
+  , 0);
+  
+  const bonusTotale = cliente.bonus_totale || 0;
+  
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full bg-gray-50 hover:bg-gray-100 transition-colors px-4 py-3"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Building2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-semibold text-gray-900">{cliente.nome}</h3>
+              <div className="flex gap-4 text-xs text-gray-600 mt-1">
+                <span>Budget: {formatCurrency(cliente.budget)}</span>
+                <span>Ore Prev: {formatHours(totalOrePreventivate)}</span>
+                <span>Ore Eff: {formatHours(totalOreEffettive)}</span>
+                <span className={`font-bold ${bonusTotale >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Bonus: {formatCurrency(bonusTotale)}
+                </span>
+              </div>
+            </div>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </div>
-);
+          {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+        </div>
+      </button>
 
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-4 space-y-3">
+              {cliente.progetti.map(progetto => (
+                <ProgettoSection
+                  key={progetto.id}
+                  progetto={progetto}
+                  expanded={expandedProjects[progetto.id]}
+                  onToggle={() => toggleProject(progetto.id)}
+                  expandedAreas={expandedAreas}
+                  toggleArea={toggleArea}
+                  expandedActivities={expandedActivities}
+                  toggleActivity={toggleActivity}
+                  formatCurrency={formatCurrency}
+                  formatHours={formatHours}
+                  getStatusColor={getStatusColor}
+                  getDiffColor={getDiffColor}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 // Progetto Section
 const ProgettoSection = ({
   progetto,
@@ -277,60 +307,84 @@ const ProgettoSection = ({
   formatHours,
   getStatusColor,
   getDiffColor
-}) => (
-  <div className="border border-gray-200 rounded-lg overflow-hidden ml-8">
-    <button
-      onClick={onToggle}
-      className="w-full bg-white hover:bg-gray-50 transition-colors px-4 py-3 flex items-center justify-between"
-    >
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-purple-100 rounded-lg">
-          <FolderKanban className="w-4 h-4 text-purple-600" />
-        </div>
-        <div className="text-left">
-          <h4 className="font-semibold text-gray-900 text-sm">{progetto.nome}</h4>
-          <div className="flex gap-4 text-xs text-gray-500 mt-1">
-            <span>Ore: {formatHours(progetto.ore_assegnate * 60)}</span>
-            <span>Budget: {formatCurrency(progetto.budget_risorsa)}</span>
+}) => {
+  
+  // Calcola totali
+  const totalOrePreventivate = progetto.aree.reduce((sum, area) => 
+    sum + area.attivita.reduce((attSum, att) => 
+      attSum + att.tasks.reduce((tSum, task) => tSum + (task.ore_stimate || 0), 0)
+    , 0)
+  , 0);
+  
+  const totalOreEffettive = progetto.aree.reduce((sum, area) => 
+    sum + area.attivita.reduce((attSum, att) => 
+      attSum + att.tasks.reduce((tSum, task) => tSum + (task.ore_effettive || 0), 0)
+    , 0)
+  , 0);
+  
+  const bonusTotale = progetto.bonus_totale || 0;
+  
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden ml-8">
+      <button
+        onClick={onToggle}
+        className="w-full bg-white hover:bg-gray-50 transition-colors px-4 py-3"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <FolderKanban className="w-4 h-4 text-purple-600" />
+            </div>
+            <div className="text-left">
+              <h4 className="font-semibold text-gray-900 text-sm">{progetto.nome}</h4>
+              <div className="flex gap-4 text-xs text-gray-600 mt-1">
+                <span>Ore Ass: {formatHours(progetto.ore_assegnate * 60)}</span>
+                <span>Ore Prev: {formatHours(totalOrePreventivate)}</span>
+                <span>Ore Eff: {formatHours(totalOreEffettive)}</span>
+                <span className={`font-bold ${bonusTotale >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Bonus: {formatCurrency(bonusTotale)}
+                </span>
+              </div>
+            </div>
           </div>
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
-      </div>
-      {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-    </button>
+      </button>
 
-    <AnimatePresence>
-      {expanded && (
-        <motion.div
-          initial={{ height: 0 }}
-          animate={{ height: 'auto' }}
-          exit={{ height: 0 }}
-          className="overflow-hidden bg-gray-50"
-        >
-          <div className="p-3 space-y-2">
-            {progetto.aree.length === 0 ? (
-              <p className="text-sm text-gray-500 italic ml-4">Nessuna area in questo progetto</p>
-            ) : (
-              progetto.aree.map(area => (
-                <AreaSection
-                  key={area.id || 'senza_area'}
-                  area={area}
-                  expanded={expandedAreas[area.id || 'senza_area']}
-                  onToggle={() => toggleArea(area.id || 'senza_area')}
-                  expandedActivities={expandedActivities}
-                  toggleActivity={toggleActivity}
-                  formatCurrency={formatCurrency}
-                  formatHours={formatHours}
-                  getStatusColor={getStatusColor}
-                  getDiffColor={getDiffColor}
-                />
-              ))
-            )}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </div>
-);
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden bg-gray-50"
+          >
+            <div className="p-3 space-y-2">
+              {progetto.aree.length === 0 ? (
+                <p className="text-sm text-gray-500 italic ml-4">Nessuna area in questo progetto</p>
+              ) : (
+                progetto.aree.map(area => (
+                  <AreaSection
+                    key={area.id || 'senza_area'}
+                    area={area}
+                    expanded={expandedAreas[area.id || 'senza_area']}
+                    onToggle={() => toggleArea(area.id || 'senza_area')}
+                    expandedActivities={expandedActivities}
+                    toggleActivity={toggleActivity}
+                    formatCurrency={formatCurrency}
+                    formatHours={formatHours}
+                    getStatusColor={getStatusColor}
+                    getDiffColor={getDiffColor}
+                  />
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 // Area Section
 const AreaSection = ({
@@ -343,59 +397,77 @@ const AreaSection = ({
   formatHours,
   getStatusColor,
   getDiffColor
-}) => (
-  <div className="border border-gray-200 rounded-lg overflow-hidden ml-8 bg-white">
-    <button
-      onClick={onToggle}
-      className="w-full hover:bg-gray-50 transition-colors px-3 py-2 flex items-center justify-between"
-    >
-      <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-green-100 rounded">
-          <Layers className="w-3.5 h-3.5 text-green-600" />
-        </div>
-        <div className="text-left">
-          <h5 className="font-medium text-gray-900 text-xs">{area.nome}</h5>
-          {area.id && (
-            <div className="flex gap-3 text-xs text-gray-500 mt-0.5">
-              <span>Ore: {formatHours(area.ore_assegnate * 60)}</span>
-              <span>Budget: {formatCurrency(area.budget_risorsa)}</span>
+}) => {
+  
+  // Calcola totali
+  const totalOrePreventivate = area.attivita.reduce((sum, att) => 
+    sum + att.tasks.reduce((tSum, task) => tSum + (task.ore_stimate || 0), 0)
+  , 0);
+  
+  const totalOreEffettive = area.attivita.reduce((sum, att) => 
+    sum + att.tasks.reduce((tSum, task) => tSum + (task.ore_effettive || 0), 0)
+  , 0);
+  
+  const bonusTotale = area.bonus_totale || 0;
+  
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden ml-8 bg-white">
+      <button
+        onClick={onToggle}
+        className="w-full hover:bg-gray-50 transition-colors px-3 py-2"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-green-100 rounded">
+              <Layers className="w-3.5 h-3.5 text-green-600" />
             </div>
-          )}
-        </div>
-      </div>
-      {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-    </button>
-
-    <AnimatePresence>
-      {expanded && (
-        <motion.div
-          initial={{ height: 0 }}
-          animate={{ height: 'auto' }}
-          exit={{ height: 0 }}
-          className="overflow-hidden bg-gray-50"
-        >
-          <div className="p-2 space-y-2">
-            {area.attivita.length === 0 ? (
-              <p className="text-xs text-gray-500 italic ml-3">Nessuna attività in quest'area</p>
-            ) : (
-              area.attivita.map(attivita => (
-                <AttivitaSection
-                  key={attivita.id}
-                  attivita={attivita}
-                  expanded={expandedActivities[attivita.id]}
-                  onToggle={() => toggleActivity(attivita.id)}
-                  formatHours={formatHours}
-                  getStatusColor={getStatusColor}
-                  getDiffColor={getDiffColor}
-                />
-              ))
-            )}
+            <div className="text-left">
+              <h5 className="font-medium text-gray-900 text-xs">{area.nome}</h5>
+              <div className="flex gap-3 text-xs text-gray-600 mt-0.5">
+                <span>Ore Prev: {formatHours(totalOrePreventivate)}</span>
+                <span>Ore Eff: {formatHours(totalOreEffettive)}</span>
+                <span className={`font-bold ${bonusTotale >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Bonus: {formatCurrency(bonusTotale)}
+                </span>
+              </div>
+            </div>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </div>
-);
+          {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden bg-gray-50"
+          >
+            <div className="p-2 space-y-2">
+              {area.attivita.length === 0 ? (
+                <p className="text-xs text-gray-500 italic ml-3">Nessuna attività in quest'area</p>
+              ) : (
+                area.attivita.map(attivita => (
+                  <AttivitaSection
+                    key={attivita.id}
+                    attivita={attivita}
+                    expanded={expandedActivities[attivita.id]}
+                    onToggle={() => toggleActivity(attivita.id)}
+                    formatHours={formatHours}
+                    getStatusColor={getStatusColor}
+                    getDiffColor={getDiffColor}
+                    formatCurrency={formatCurrency}
+                  />
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 // Attività Section
 const AttivitaSection = ({
@@ -404,87 +476,328 @@ const AttivitaSection = ({
   onToggle,
   formatHours,
   getStatusColor,
-  getDiffColor
-}) => (
-  <div className="border border-gray-200 rounded-lg overflow-hidden ml-6 bg-white">
-    <button
-      onClick={onToggle}
-      className="w-full hover:bg-gray-50 transition-colors px-3 py-2 flex items-center justify-between"
-    >
-      <div className="flex items-center gap-2">
-        <div className="p-1 bg-orange-100 rounded">
-          <ListTodo className="w-3 h-3 text-orange-600" />
-        </div>
-        <div className="text-left">
-          <h6 className="font-medium text-gray-900 text-xs">{attivita.nome}</h6>
-          <div className="flex gap-2 items-center text-xs mt-0.5">
-            <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(attivita.stato)}`}>
-              {attivita.stato}
-            </span>
-            <span className="text-gray-500">Stimate: {formatHours(attivita.ore_stimate)}</span>
+  getDiffColor,
+  formatCurrency
+}) => {
+  
+  // Calcola totali dalle task
+  const totalOrePreventivate = attivita.tasks.reduce((sum, task) => sum + (task.ore_stimate || 0), 0);
+  const totalOreEffettive = attivita.tasks.reduce((sum, task) => sum + (task.ore_effettive || 0), 0);
+  const bonusTotale = attivita.bonus_totale || 0;
+  
+  // Calcola budget (usa il costo orario dalla prima task con bonus)
+  const costoOrario = attivita.tasks.find(t => t.bonus)?.bonus?.costo_orario_finale || 0;
+  const budgetPreventivo = (totalOrePreventivate / 60) * costoOrario;
+  const budgetEffettivo = (totalOreEffettive / 60) * costoOrario;
+  
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden ml-6 bg-white">
+      <button
+        onClick={onToggle}
+        className="w-full hover:bg-gray-50 transition-colors px-3 py-2"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-orange-100 rounded">
+              <ListTodo className="w-3 h-3 text-orange-600" />
+            </div>
+            <div className="text-left">
+              <h6 className="font-medium text-gray-900 text-xs">{attivita.nome}</h6>
+              <div className="flex gap-3 text-xs text-gray-600 mt-0.5">
+                <span>Prev: {formatHours(totalOrePreventivate)}</span>
+                <span>Eff: {formatHours(totalOreEffettive)}</span>
+                <span>Budget Prev: {formatCurrency(budgetPreventivo)}</span>
+                <span>Budget Eff: {formatCurrency(budgetEffettivo)}</span>
+                <span className={`font-bold ${bonusTotale >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Bonus: {formatCurrency(bonusTotale)}
+                </span>
+              </div>
+            </div>
           </div>
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </div>
-      </div>
-      {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-    </button>
+      </button>
 
-    <AnimatePresence>
-      {expanded && (
-        <motion.div
-          initial={{ height: 0 }}
-          animate={{ height: 'auto' }}
-          exit={{ height: 0 }}
-          className="overflow-hidden bg-gray-50"
-        >
-          <div className="p-2 space-y-1">
-            {attivita.task.length === 0 ? (
-              <p className="text-xs text-gray-500 italic ml-2">Nessuna task in questa attività</p>
-            ) : (
-              attivita.task.map(task => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden bg-gray-50"
+          >
+            <div className="p-3">
+              {attivita.tasks.length === 0 ? (
+                <p className="text-xs text-gray-500 italic ml-2">Nessuna task in questa attività</p>
+              ) : (
+                <TaskTableView
+                  tasks={attivita.tasks}
                   formatHours={formatHours}
+                  formatCurrency={formatCurrency}
                   getStatusColor={getStatusColor}
-                  getDiffColor={getDiffColor}
                 />
-              ))
-            )}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </div>
-);
-
-// Task Row
-const TaskRow = ({ task, formatHours, getStatusColor, getDiffColor }) => (
-  <div className="bg-white border border-gray-200 rounded px-3 py-2 ml-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <CheckSquare className="w-3 h-3 text-gray-400" />
-        <span className="text-xs font-medium text-gray-900">{task.nome}</span>
-        <span className={`px-1.5 py-0.5 rounded-full text-xs ${getStatusColor(task.stato)}`}>
-          {task.stato}
-        </span>
-      </div>
-      <div className="flex items-center gap-3 text-xs">
-        <span className="text-gray-600">
-          Prev: {formatHours(task.ore_stimate)}
-        </span>
-        {task.ore_effettive !== null && task.ore_effettive !== undefined && (
-          <>
-            <span className="text-gray-600">
-              Eff: {formatHours(task.ore_effettive)}
-            </span>
-            <span className={`font-semibold ${getDiffColor(task.diff_ore)}`}>
-              {task.diff_ore > 0 ? '+' : ''}{formatHours(task.diff_ore)}
-            </span>
-          </>
+              )}
+            </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
-  </div>
-);
+  );
+};
+
+// =====================================================
+// SOSTITUISCI IL COMPONENTE TaskRow IN ResourceBudgetDrillDownModal.js
+// CON QUESTO CODICE AGGIORNATO
+// =====================================================
+
+// Task Row con Bonus
+const TaskRow = ({ task, formatHours, getStatusColor, getDiffColor, formatCurrency }) => {
+  
+  // Funzione per ottenere il colore del bonus
+  const getBonusColor = (tipo) => {
+    switch (tipo) {
+      case 'positivo': return 'bg-green-100 text-green-800 border-green-200';
+      case 'zero': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'negativo': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Funzione per ottenere l'icona del bonus
+  const getBonusIcon = (tipo) => {
+    switch (tipo) {
+      case 'positivo': return <TrendingUp className="w-3 h-3" />;
+      case 'zero': return <Minus className="w-3 h-3" />;
+      case 'negativo': return <TrendingDown className="w-3 h-3" />;
+      default: return <Gift className="w-3 h-3" />;
+    }
+  };
+
+  // Funzione per ottenere il badge dello stato bonus
+  const getBonusStatoBadge = (stato) => {
+    switch (stato) {
+      case 'pending':
+        return <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">In Attesa</span>;
+      case 'approvato':
+        return <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium">Approvato</span>;
+      case 'rifiutato':
+        return <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs font-medium">Rifiutato</span>;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded px-3 py-2 ml-4">
+      {/* Riga principale task */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <CheckSquare className="w-3 h-3 text-gray-400" />
+          <span className="text-xs font-medium text-gray-900">{task.nome}</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-xs ${getStatusColor(task.stato)}`}>
+            {task.stato}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-gray-600">
+            Prev: {formatHours(task.ore_stimate)}
+          </span>
+          {task.ore_effettive !== null && task.ore_effettive !== undefined && (
+            <>
+              <span className="text-gray-600">
+                Eff: {formatHours(task.ore_effettive)}
+              </span>
+              <span className={`font-semibold ${getDiffColor((task.ore_stimate || 0) - (task.ore_effettive || 0))}`}>
+                {((task.ore_stimate || 0) - (task.ore_effettive || 0)) > 0 ? '+' : ''}{formatHours((task.ore_stimate || 0) - (task.ore_effettive || 0))}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Sezione Bonus (solo se esiste) */}
+      {task.bonus && (
+        <div className={`mt-2 p-2 border rounded-lg ${getBonusColor(task.bonus.tipo)}`}>
+          <div className="flex items-center justify-between">
+            {/* Icona e Tipo Bonus */}
+            <div className="flex items-center gap-2">
+              {getBonusIcon(task.bonus.tipo)}
+              <span className="text-xs font-semibold">
+                {task.bonus.tipo === 'positivo' && 'Bonus Positivo'}
+                {task.bonus.tipo === 'zero' && 'Bonus Perfetto'}
+                {task.bonus.tipo === 'negativo' && 'Penalità'}
+              </span>
+              {task.bonus.percentuale_bonus > 0 && (
+                <span className="text-xs">
+                  ({task.bonus.percentuale_bonus}%)
+                </span>
+              )}
+            </div>
+
+            {/* Importo Bonus */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold">
+                {formatCurrency(task.bonus.importo_bonus)}
+              </span>
+              {getBonusStatoBadge(task.bonus.stato)}
+            </div>
+          </div>
+
+          {/* Dettagli aggiuntivi (solo se espanso o per manager) */}
+          {task.bonus.stato !== 'pending' && (
+            <div className="mt-2 pt-2 border-t border-current border-opacity-20">
+              <div className="flex items-center justify-between text-xs">
+                <span className="opacity-75">
+                  Differenza: {task.bonus.differenza_ore} min
+                </span>
+                <span className="opacity-75">
+                  Costo Orario: {formatCurrency(task.bonus.costo_orario_finale)}/h
+                </span>
+              </div>
+              
+              {/* Commento Manager (se presente) */}
+              {task.bonus.commento_manager && (
+                <div className="mt-2 text-xs opacity-75 italic">
+                  "{task.bonus.commento_manager}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Tabella Dettagliata Tasks con Bonus (Stile Excel)
+const TaskTableView = ({ tasks, formatHours, formatCurrency, getStatusColor }) => {
+  // Calcola totali
+  const totaleBonus = tasks.reduce((sum, task) => {
+    if (task.bonus && task.bonus.stato === 'pending') {
+      return sum + parseFloat(task.bonus.importo_bonus || 0);
+    }
+    return sum;
+  }, 0);
+
+  const totaleBonusApprovato = tasks.reduce((sum, task) => {
+    if (task.bonus && task.bonus.stato === 'approvato') {
+      return sum + parseFloat(task.bonus.importo_bonus || 0);
+    }
+    return sum;
+  }, 0);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full bg-white border border-gray-300 text-xs">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="px-2 py-2 border-b text-left font-semibold">Nome Task</th>
+            <th className="px-2 py-2 border-b text-center font-semibold">Stato</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Ore Prev.</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Ore Eff.</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Costo Orario</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Totale Prev.</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Totale Eff.</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Diff.</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">% Bonus</th>
+            <th className="px-2 py-2 border-b text-right font-semibold">Bonus/Penalità</th>
+            <th className="px-2 py-2 border-b text-center font-semibold">Stato Bonus</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map((task) => {
+            const orePreventivate = task.ore_stimate / 60; // Converti minuti in ore
+            const oreEffettive = task.ore_effettive ? task.ore_effettive / 60 : 0;
+            const costoOrario = task.bonus ? task.bonus.costo_orario_finale : 0;
+            const totalePrev = orePreventivate * costoOrario;
+            const totaleEff = oreEffettive * costoOrario;
+            const diff = totalePrev - totaleEff;
+            const percentualeBonus = task.bonus ? task.bonus.percentuale_bonus : 0;
+            const importoBonus = task.bonus ? parseFloat(task.bonus.importo_bonus) : 0;
+
+            return (
+              <tr key={task.id} className="hover:bg-gray-50">
+                <td className="px-2 py-2 border-b">{task.nome}</td>
+                <td className="px-2 py-2 border-b text-center">
+                  <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(task.stato)}`}>
+                    {task.stato}
+                  </span>
+                </td>
+                <td className="px-2 py-2 border-b text-right">{orePreventivate.toFixed(2)}h</td>
+                <td className="px-2 py-2 border-b text-right">
+                  {task.ore_effettive !== null ? `${oreEffettive.toFixed(2)}h` : '-'}
+                </td>
+                <td className="px-2 py-2 border-b text-right">{formatCurrency(costoOrario)}/h</td>
+                <td className="px-2 py-2 border-b text-right">{formatCurrency(totalePrev)}</td>
+                <td className="px-2 py-2 border-b text-right">
+                  {task.ore_effettive !== null ? formatCurrency(totaleEff) : '-'}
+                </td>
+                <td className={`px-2 py-2 border-b text-right font-semibold ${
+                  diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-600'
+                }`}>
+                  {task.ore_effettive !== null ? formatCurrency(diff) : '-'}
+                </td>
+                <td className="px-2 py-2 border-b text-right">
+                  {percentualeBonus > 0 ? `${percentualeBonus}%` : '-'}
+                </td>
+                <td className={`px-2 py-2 border-b text-right font-bold ${
+                  importoBonus > 0 ? 'text-green-600' : 
+                  importoBonus < 0 ? 'text-red-600' : 'text-gray-600'
+                }`}>
+                  {task.bonus ? formatCurrency(importoBonus) : '-'}
+                </td>
+                <td className="px-2 py-2 border-b text-center">
+                  {task.bonus && task.bonus.stato === 'pending' && (
+                    <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                      In Attesa
+                    </span>
+                  )}
+                  {task.bonus && task.bonus.stato === 'approvato' && (
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                      Approvato
+                    </span>
+                  )}
+                  {task.bonus && task.bonus.stato === 'rifiutato' && (
+                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                      Rifiutato
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="bg-gray-100 font-bold">
+          <tr>
+            <td colSpan="9" className="px-2 py-3 border-t text-right">
+              Totale Bonus da Approvare:
+            </td>
+            <td className={`px-2 py-3 border-t text-right text-lg ${
+              totaleBonus > 0 ? 'text-green-600' : 
+              totaleBonus < 0 ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {formatCurrency(totaleBonus)}
+            </td>
+            <td className="px-2 py-3 border-t"></td>
+          </tr>
+          {totaleBonusApprovato !== 0 && (
+            <tr>
+              <td colSpan="9" className="px-2 py-2 border-t text-right text-sm">
+                Totale Bonus Approvato:
+              </td>
+              <td className={`px-2 py-2 border-t text-right ${
+                totaleBonusApprovato > 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {formatCurrency(totaleBonusApprovato)}
+              </td>
+              <td className="px-2 py-2 border-t"></td>
+            </tr>
+          )}
+        </tfoot>
+      </table>
+    </div>
+  );
+};
+
 
 export default ResourceBudgetDrillDownModal;

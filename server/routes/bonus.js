@@ -411,4 +411,371 @@ router.post('/:id/gestisci-negativo', authenticateToken, requireManager, param('
   }
 });
 
+// =====================================================
+// AGGIUNGI QUESTO CODICE ALLA FINE DI server/routes/bonus.js
+// PRIMA DI: module.exports = router;
+// =====================================================
+
+// =====================================================
+// SOSTITUISCI L'ENDPOINT /api/bonus/resource/:risorsaId
+// IN server/routes/bonus.js CON QUESTO CODICE
+// =====================================================
+
+// GET /api/bonus/resource/:risorsaId - Dettaglio completo risorsa con gerarchia, bonus e totali aggregati
+router.get('/resource/:risorsaId', authenticateToken, async (req, res) => {
+  try {
+    const { risorsaId } = req.params;
+    
+    console.log(`📊 Recupero dettaglio risorsa con totali: ${risorsaId}`);
+    
+    // Query principale: ottieni tutti i dati della gerarchia con bonus E totali aggregati
+    const result = await query(`
+      WITH risorsa_info AS (
+        SELECT 
+          u.id as risorsa_id,
+          u.nome as risorsa_nome,
+          u.email,
+          u.costo_orario as costo_orario_base_utente
+        FROM utenti u
+        WHERE u.id = $1 AND u.attivo = true
+      ),
+      -- CTE per calcolare i totali dei bonus per attività
+      bonus_attivita AS (
+        SELECT 
+          t.attivita_id,
+          SUM(CASE WHEN b.stato = 'pending' THEN b.importo_bonus ELSE 0 END) as bonus_pending,
+          SUM(CASE WHEN b.stato = 'approvato' THEN b.importo_bonus ELSE 0 END) as bonus_approvato,
+          SUM(b.importo_bonus) as bonus_totale
+        FROM task t
+        LEFT JOIN bonus_risorse b ON b.task_id = t.id AND b.risorsa_id = $1
+        WHERE t.utente_assegnato = $1 AND t.attivo = true
+        GROUP BY t.attivita_id
+      ),
+      -- CTE per calcolare i totali dei bonus per area
+      bonus_area AS (
+        SELECT 
+          att.area_id,
+          SUM(CASE WHEN b.stato = 'pending' THEN b.importo_bonus ELSE 0 END) as bonus_pending,
+          SUM(CASE WHEN b.stato = 'approvato' THEN b.importo_bonus ELSE 0 END) as bonus_approvato,
+          SUM(b.importo_bonus) as bonus_totale
+        FROM attivita att
+        JOIN task t ON t.attivita_id = att.id
+        LEFT JOIN bonus_risorse b ON b.task_id = t.id AND b.risorsa_id = $1
+        WHERE t.utente_assegnato = $1 AND att.attivo = true AND t.attivo = true
+        GROUP BY att.area_id
+      ),
+      -- CTE per calcolare i totali dei bonus per progetto
+      bonus_progetto AS (
+        SELECT 
+          COALESCE(att.area_id, p.id) as progetto_ref,
+          p.id as progetto_id,
+          SUM(CASE WHEN b.stato = 'pending' THEN b.importo_bonus ELSE 0 END) as bonus_pending,
+          SUM(CASE WHEN b.stato = 'approvato' THEN b.importo_bonus ELSE 0 END) as bonus_approvato,
+          SUM(b.importo_bonus) as bonus_totale
+        FROM progetti p
+        LEFT JOIN aree ar ON ar.progetto_id = p.id
+        LEFT JOIN attivita att ON att.area_id = ar.id
+        JOIN task t ON t.attivita_id = att.id
+        LEFT JOIN bonus_risorse b ON b.task_id = t.id AND b.risorsa_id = $1
+        WHERE t.utente_assegnato = $1 AND p.attivo = true AND t.attivo = true
+        GROUP BY p.id, att.area_id
+      ),
+      -- CTE per calcolare i totali dei bonus per cliente
+      bonus_cliente AS (
+        SELECT 
+          c.id as cliente_id,
+          SUM(CASE WHEN b.stato = 'pending' THEN b.importo_bonus ELSE 0 END) as bonus_pending,
+          SUM(CASE WHEN b.stato = 'approvato' THEN b.importo_bonus ELSE 0 END) as bonus_approvato,
+          SUM(b.importo_bonus) as bonus_totale
+        FROM clienti c
+        JOIN progetti p ON p.cliente_id = c.id
+        LEFT JOIN aree ar ON ar.progetto_id = p.id
+        LEFT JOIN attivita att ON att.area_id = ar.id
+        JOIN task t ON t.attivita_id = att.id
+        LEFT JOIN bonus_risorse b ON b.task_id = t.id AND b.risorsa_id = $1
+        WHERE t.utente_assegnato = $1 AND c.attivo = true AND p.attivo = true AND t.attivo = true
+        GROUP BY c.id
+      )
+      SELECT 
+        ri.risorsa_id,
+        ri.risorsa_nome,
+        ri.email,
+        
+        -- Cliente con totali aggregati
+        c.id as cliente_id,
+        c.nome as cliente_nome,
+        c.budget as cliente_budget,
+        c.budget_utilizzato as cliente_budget_utilizzato,
+        acr.costo_orario_base,
+        acr.costo_orario_finale,
+        acr.ore_assegnate as ore_assegnate_cliente,
+        acr.budget_risorsa as budget_cliente,
+        COALESCE(bc.bonus_pending, 0) as cliente_bonus_pending,
+        COALESCE(bc.bonus_approvato, 0) as cliente_bonus_approvato,
+        COALESCE(bc.bonus_totale, 0) as cliente_bonus_totale,
+        
+        -- Progetto con totali aggregati
+        p.id as progetto_id,
+        p.nome as progetto_nome,
+        p.budget_assegnato as progetto_budget_assegnato,
+        p.budget_utilizzato as progetto_budget_utilizzato,
+        ap.ore_assegnate as ore_assegnate_progetto,
+        ap.budget_risorsa as budget_progetto,
+        COALESCE(bp.bonus_pending, 0) as progetto_bonus_pending,
+        COALESCE(bp.bonus_approvato, 0) as progetto_bonus_approvato,
+        COALESCE(bp.bonus_totale, 0) as progetto_bonus_totale,
+        
+        -- Area con totali aggregati
+        a.id as area_id,
+        a.nome as area_nome,
+        a.ore_stimate as area_ore_stimate,
+        a.ore_effettive as area_ore_effettive,
+        a.budget_stimato as area_budget_stimato,
+        a.budget_assegnato as area_budget_assegnato,
+        a.budget_utilizzato as area_budget_utilizzato,
+        aa.ore_assegnate as ore_assegnate_area,
+        aa.budget_risorsa as budget_area,
+        COALESCE(ba.bonus_pending, 0) as area_bonus_pending,
+        COALESCE(ba.bonus_approvato, 0) as area_bonus_approvato,
+        COALESCE(ba.bonus_totale, 0) as area_bonus_totale,
+        
+        -- Attività con totali aggregati
+        att.id as attivita_id,
+        att.nome as attivita_nome,
+        att.ore_stimate as attivita_ore_stimate,
+        att.ore_effettive as attivita_ore_effettive,
+        att.budget_assegnato as attivita_budget_assegnato,
+        att.budget_utilizzato as attivita_budget_utilizzato,
+        COALESCE(batt.bonus_pending, 0) as attivita_bonus_pending,
+        COALESCE(batt.bonus_approvato, 0) as attivita_bonus_approvato,
+        COALESCE(batt.bonus_totale, 0) as attivita_bonus_totale,
+        
+        -- Task
+        t.id as task_id,
+        t.nome as task_nome,
+        t.stato as task_stato,
+        t.ore_stimate as task_ore_stimate,
+        t.ore_effettive as task_ore_effettive,
+        t.scadenza as task_scadenza,
+        t.data_completamento,
+        
+        -- Bonus (se esiste)
+        b.id as bonus_id,
+        b.tipo as bonus_tipo,
+        b.differenza_ore,
+        b.importo_bonus,
+        b.percentuale_bonus,
+        b.costo_orario_finale as bonus_costo_orario_finale,
+        b.stato as bonus_stato,
+        b.azione_negativo,
+        b.manager_id,
+        b.data_approvazione,
+        b.commento_manager,
+        b.data_creazione as bonus_data_creazione
+        
+      FROM risorsa_info ri
+      
+      -- Join con assegnazione cliente
+      LEFT JOIN assegnazione_cliente_risorsa acr ON acr.risorsa_id = ri.risorsa_id
+      LEFT JOIN clienti c ON c.id = acr.cliente_id AND c.attivo = true
+      LEFT JOIN bonus_cliente bc ON bc.cliente_id = c.id
+      
+      -- Join con progetti
+      LEFT JOIN assegnazioni_progetto ap ON ap.utente_id = ri.risorsa_id AND ap.attivo = true
+      LEFT JOIN progetti p ON p.id = ap.progetto_id AND p.cliente_id = c.id AND p.attivo = true
+      LEFT JOIN bonus_progetto bp ON bp.progetto_id = p.id
+      
+      -- Join con aree
+      LEFT JOIN assegnazioni_area aa ON aa.utente_id = ri.risorsa_id
+      LEFT JOIN aree a ON a.id = aa.area_id AND a.progetto_id = p.id AND a.attivo = true
+      LEFT JOIN bonus_area ba ON ba.area_id = a.id
+      
+      -- Join con attività
+      LEFT JOIN assegnazioni_attivita aat ON aat.utente_id = ri.risorsa_id AND aat.attivo = true
+      LEFT JOIN attivita att ON att.id = aat.attivita_id AND att.area_id = a.id AND att.attivo = true
+      LEFT JOIN bonus_attivita batt ON batt.attivita_id = att.id
+      
+      -- Join con task
+      LEFT JOIN task t ON t.utente_assegnato = ri.risorsa_id AND t.attivita_id = att.id AND t.attivo = true
+      
+      -- Join con bonus
+      LEFT JOIN bonus_risorse b ON b.task_id = t.id AND b.risorsa_id = ri.risorsa_id
+      
+      ORDER BY 
+        c.nome, 
+        p.nome, 
+        a.nome, 
+        att.nome, 
+        t.scadenza NULLS LAST
+    `, [risorsaId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Risorsa non trovata o senza assegnazioni'
+      });
+    }
+    
+    // Struttura i dati in gerarchia (usa la stessa funzione buildResourceHierarchy ma con campi aggiuntivi)
+    const hierarchyData = buildResourceHierarchyWithTotals(result.rows);
+    
+    
+    console.log(`✅ Dettaglio risorsa con totali recuperato: ${result.rows.length} record`);
+    
+    res.json({
+      risorsa: {
+        id: result.rows[0].risorsa_id,
+        nome: result.rows[0].risorsa_nome,
+        email: result.rows[0].email
+      },
+      hierarchy: hierarchyData
+    });
+    
+  } catch (error) {
+    console.error('❌ Errore recupero dettaglio risorsa:', error);
+    res.status(500).json({
+      error: 'Errore nel recupero del dettaglio risorsa',
+      details: error.message
+    });
+  }
+});
+
+// =====================================================
+// FUNZIONE HELPER AGGIORNATA: Costruisce gerarchia con totali
+// =====================================================
+function buildResourceHierarchyWithTotals(rows) {
+  const clienti = new Map();
+  
+  rows.forEach(row => {
+    // Salta righe senza cliente
+    if (!row.cliente_id) return;
+    
+    // Cliente
+    if (!clienti.has(row.cliente_id)) {
+      clienti.set(row.cliente_id, {
+        id: row.cliente_id,
+        nome: row.cliente_nome,
+        budget: parseFloat(row.cliente_budget) || 0,
+        budget_utilizzato: parseFloat(row.cliente_budget_utilizzato) || 0,
+        costo_orario_base: parseFloat(row.costo_orario_base) || 0,
+        costo_orario_finale: parseFloat(row.costo_orario_finale) || 0,
+        ore_assegnate: parseFloat(row.ore_assegnate_cliente) || 0,
+        budget_risorsa: parseFloat(row.budget_cliente) || 0,
+        // TOTALI AGGREGATI
+        bonus_pending: parseFloat(row.cliente_bonus_pending) || 0,
+        bonus_approvato: parseFloat(row.cliente_bonus_approvato) || 0,
+        bonus_totale: parseFloat(row.cliente_bonus_totale) || 0,
+        progetti: new Map()
+      });
+    }
+    
+    const cliente = clienti.get(row.cliente_id);
+    
+    // Progetto
+    if (row.progetto_id && !cliente.progetti.has(row.progetto_id)) {
+      cliente.progetti.set(row.progetto_id, {
+        id: row.progetto_id,
+        nome: row.progetto_nome,
+        budget_assegnato: parseFloat(row.progetto_budget_assegnato) || 0,
+        budget_utilizzato: parseFloat(row.progetto_budget_utilizzato) || 0,
+        ore_assegnate: parseFloat(row.ore_assegnate_progetto) || 0,
+        budget_risorsa: parseFloat(row.budget_progetto) || 0,
+        // TOTALI AGGREGATI
+        bonus_pending: parseFloat(row.progetto_bonus_pending) || 0,
+        bonus_approvato: parseFloat(row.progetto_bonus_approvato) || 0,
+        bonus_totale: parseFloat(row.progetto_bonus_totale) || 0,
+        aree: new Map()
+      });
+    }
+    
+    if (row.progetto_id) {
+      const progetto = cliente.progetti.get(row.progetto_id);
+      
+      // Area
+      if (row.area_id && !progetto.aree.has(row.area_id)) {
+        progetto.aree.set(row.area_id, {
+          id: row.area_id,
+          nome: row.area_nome,
+          ore_stimate: parseInt(row.area_ore_stimate) || 0,
+          ore_effettive: parseInt(row.area_ore_effettive) || 0,
+          budget_stimato: parseFloat(row.area_budget_stimato) || 0,
+          budget_assegnato: parseFloat(row.area_budget_assegnato) || 0,
+          budget_utilizzato: parseFloat(row.area_budget_utilizzato) || 0,
+          ore_assegnate: parseFloat(row.ore_assegnate_area) || 0,
+          budget_risorsa: parseFloat(row.budget_area) || 0,
+          // TOTALI AGGREGATI
+          bonus_pending: parseFloat(row.area_bonus_pending) || 0,
+          bonus_approvato: parseFloat(row.area_bonus_approvato) || 0,
+          bonus_totale: parseFloat(row.area_bonus_totale) || 0,
+          attivita: new Map()
+        });
+      }
+      
+      if (row.area_id) {
+        const area = progetto.aree.get(row.area_id);
+        
+        // Attività
+        if (row.attivita_id && !area.attivita.has(row.attivita_id)) {
+          area.attivita.set(row.attivita_id, {
+            id: row.attivita_id,
+            nome: row.attivita_nome,
+            ore_stimate: parseInt(row.attivita_ore_stimate) || 0,
+            ore_effettive: parseInt(row.attivita_ore_effettive) || 0,
+            budget_assegnato: parseFloat(row.attivita_budget_assegnato) || 0,
+            budget_utilizzato: parseFloat(row.attivita_budget_utilizzato) || 0,
+            // TOTALI AGGREGATI
+            bonus_pending: parseFloat(row.attivita_bonus_pending) || 0,
+            bonus_approvato: parseFloat(row.attivita_bonus_approvato) || 0,
+            bonus_totale: parseFloat(row.attivita_bonus_totale) || 0,
+            tasks: []
+          });
+        }
+        
+        if (row.attivita_id && row.task_id) {
+          const attivita = area.attivita.get(row.attivita_id);
+          
+          // Task
+          attivita.tasks.push({
+            id: row.task_id,
+            nome: row.task_nome,
+            stato: row.task_stato,
+            ore_stimate: parseInt(row.task_ore_stimate) || 0,
+            ore_effettive: parseInt(row.task_ore_effettive) || 0,
+            scadenza: row.task_scadenza,
+            data_completamento: row.data_completamento,
+            bonus: row.bonus_id ? {
+              id: row.bonus_id,
+              tipo: row.bonus_tipo,
+              differenza_ore: parseInt(row.differenza_ore) || 0,
+              importo_bonus: parseFloat(row.importo_bonus) || 0,
+              percentuale_bonus: parseFloat(row.percentuale_bonus) || 0,
+              costo_orario_finale: parseFloat(row.bonus_costo_orario_finale) || 0,
+              stato: row.bonus_stato,
+              azione_negativo: row.azione_negativo,
+              data_creazione: row.bonus_data_creazione,
+              data_approvazione: row.data_approvazione,
+              commento_manager: row.commento_manager
+            } : null
+          });
+        }
+      }
+    }
+  });
+  
+  // Converti Map in Array
+  return Array.from(clienti.values()).map(cliente => ({
+    ...cliente,
+    progetti: Array.from(cliente.progetti.values()).map(progetto => ({
+      ...progetto,
+      aree: Array.from(progetto.aree.values()).map(area => ({
+        ...area,
+        attivita: Array.from(area.attivita.values())
+      }))
+    }))
+  }));
+}
+
+// =====================================================
+// FINE CODICE DA AGGIUNGERE
+// =====================================================
+
 module.exports = router;
