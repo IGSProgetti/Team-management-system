@@ -15,242 +15,262 @@ import {
   Download,
   RefreshCw,
   Search,
-  ArrowUpRight,
-  ArrowDownRight,
+  DollarSign,
   TrendingUp,
   BarChart3,
-  AlertCircle
+  AlertCircle,
+  Award,
+  FileText
 } from 'lucide-react';
 
 const RiassegnazioniStorico = () => {
-  const [riassegnazioni, setRiassegnazioni] = useState([]);
-  const [statistiche, setStatistiche] = useState(null);
+  const [bonusStorico, setBonusStorico] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    stato: '',
+    tipo: '',
+    stato_gestione: '',
     risorsa_id: '',
-    progetto_id: '',
+    gestito_da: '',
     data_inizio: '',
-    data_fine: '',
-    search: ''
+    data_fine: ''
   });
   
-  const [selectedRiassegnazione, setSelectedRiassegnazione] = useState(null);
+  const [selectedBonus, setSelectedBonus] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showAnnullaModal, setShowAnnullaModal] = useState(false);
-  const [motivoAnnullamento, setMotivoAnnullamento] = useState('');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [totalBonus, setTotalBonus] = useState(0);
 
-  // Fetch statistiche
-  const fetchStatistiche = async () => {
-  try {
-    const response = await api.get('/riassegnazioni/statistiche');
-    if (response.data.success) {
-      setStatistiche(response.data.statistiche);
-    }
-  } catch (error) {
-    console.error('Error fetching statistiche:', error);
-  }
-};
+  // Dropdown data
+  const [risorse, setRisorse] = useState([]);
+  const [managers, setManagers] = useState([]);
 
-  // Fetch storico riassegnazioni
-  const fetchStorico = async (page = 1) => {
-  try {
-    setLoading(true);
-    const params = {
-      limit: 20,
-      offset: (page - 1) * 20,
-      ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+  // Fetch risorse per filtro
+  useEffect(() => {
+    const fetchRisorse = async () => {
+      try {
+        const response = await api.get('/users', { params: { ruolo: 'risorsa' } });
+        setRisorse(response.data.users || []);
+      } catch (error) {
+        console.error('Error fetching risorse:', error);
+      }
     };
 
-    const response = await api.get('/riassegnazioni/storico', { params });
-    
-    if (response.data.success) {
-      setRiassegnazioni(response.data.riassegnazioni);
-      setTotalPages(Math.ceil(response.data.total / 20));
-      setHasMore(response.data.has_more);
-    }
-  } catch (error) {
-    console.error('Error fetching storico:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+    const fetchManagers = async () => {
+      try {
+        const response = await api.get('/users', { params: { ruolo: 'manager' } });
+        setManagers(response.data.users || []);
+      } catch (error) {
+        console.error('Error fetching managers:', error);
+      }
+    };
 
-  // Annulla riassegnazione
-const annullaRiassegnazione = async (id) => {
-  try {
-    const response = await api.put(`/riassegnazioni/${id}/annulla`, {
-      motivo_annullamento: motivoAnnullamento
-    });
-    
-    if (response.data.success) {
-      setShowAnnullaModal(false);
-      setMotivoAnnullamento('');
-      fetchStorico(currentPage);
-      fetchStatistiche();
-      // TODO: Show success toast
-    }
-  } catch (error) {
-    console.error('Error annulling riassegnazione:', error);
-  }
-};
-
-  useEffect(() => {
-    fetchStorico();
-    fetchStatistiche();
+    fetchRisorse();
+    fetchManagers();
   }, []);
+
+  // Fetch storico bonus
+  const fetchStorico = async (page = 1) => {
+    try {
+      setLoading(true);
+      const params = {
+        limit: 20,
+        offset: (page - 1) * 20,
+        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+      };
+
+      const response = await api.get('/bonus/storico-gestione', { params });
+      
+      if (response.data.success) {
+        setBonusStorico(response.data.bonus);
+        setTotalPages(Math.ceil(response.data.total / 20));
+        setHasMore(response.data.has_more);
+        setTotalBonus(response.data.total);
+        setCurrentPage(page);
+      }
+    } catch (error) {
+      console.error('Error fetching storico bonus:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchStorico(1);
   }, [filters]);
-
-  // Format time
-  const formatTime = (minutes) => {
-    if (!minutes) return '0min';
-    const hours = Math.floor(Math.abs(minutes) / 60);
-    const mins = Math.abs(minutes) % 60;
-    return hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
-  };
 
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
       currency: 'EUR',
-      minimumFractionDigits: 2
-    }).format(Math.abs(amount || 0));
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   };
 
   // Format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('it-IT', {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('it-IT', {
       day: '2-digit',
-      month: 'short',
+      month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    });
+    }).format(date);
+  };
+
+  // Get badge color based on tipo
+  const getTipoBadge = (tipo) => {
+    switch(tipo) {
+      case 'positivo':
+        return 'bg-green-100 text-green-800';
+      case 'negativo':
+        return 'bg-red-100 text-red-800';
+      case 'zero':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Get badge text based on tipo
+  const getTipoLabel = (tipo) => {
+    switch(tipo) {
+      case 'positivo':
+        return '✅ Bonus';
+      case 'negativo':
+        return '❌ Penalità';
+      case 'zero':
+        return '🎯 Perfetto';
+      default:
+        return tipo;
+    }
+  };
+
+  // Get action badge color
+  const getAzioneBadge = (stato_gestione) => {
+    switch(stato_gestione) {
+      case 'pagato':
+        return 'bg-green-100 text-green-800';
+      case 'convertito_ore':
+        return 'bg-blue-100 text-blue-800';
+      case 'task_creata':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
     <div className="space-y-6">
-      
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-            <ArrowRightLeft className="w-8 h-8 text-green-600" />
-            Storico Riassegnazioni Ore
-          </h1>
-          <p className="text-gray-600">
-            Visualizza e gestisci tutte le riassegnazioni ore del team
+          <h1 className="text-2xl font-bold text-gray-900">Storico Gestione Bonus</h1>
+          <p className="text-gray-600 mt-1">
+            Visualizza tutti i bonus e penalità gestiti ({totalBonus} totali)
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => fetchStorico(currentPage)}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2"
-          >
-            <RefreshCw size={18} />
-            Aggiorna
-          </button>
-          <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg flex items-center gap-2">
-            <Download size={18} />
-            Esporta
-          </button>
-        </div>
+        <button
+          onClick={() => fetchStorico(currentPage)}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2"
+        >
+          <RefreshCw size={18} />
+          Aggiorna
+        </button>
       </div>
 
-      {/* Statistiche Overview */}
-      {statistiche && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Riassegnazioni Attive</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {statistiche.riassegnazioni.attive}
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Ore Riassegnate</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {statistiche.minuti.ore_riassegnate_attive}h
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Clock className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Crediti Disponibili</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {statistiche.crediti.ore_disponibili}h
-                </p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">% Compensazione</p>
-                <p className="text-3xl font-bold text-yellow-600">
-                  {statistiche.compensazione.percentuale_possibile}%
-                </p>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <BarChart3 className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Filter className="w-5 h-5" />
-          Filtri di Ricerca
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter size={20} className="text-gray-600" />
+          <h3 className="text-lg font-semibold text-gray-900">Filtri</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* Tipo */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Stato</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo
+            </label>
             <select
-              value={filters.stato}
-              onChange={(e) => setFilters({...filters, stato: e.target.value})}
+              value={filters.tipo}
+              onChange={(e) => setFilters({...filters, tipo: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Tutti</option>
-              <option value="attiva">Attive</option>
-              <option value="annullata">Annullate</option>
+              <option value="positivo">Bonus</option>
+              <option value="negativo">Penalità</option>
+              <option value="zero">Perfetto</option>
             </select>
           </div>
 
+          {/* Stato Gestione */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data Inizio</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Azione
+            </label>
+            <select
+              value={filters.stato_gestione}
+              onChange={(e) => setFilters({...filters, stato_gestione: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tutte</option>
+              <option value="pagato">Pagato</option>
+              <option value="convertito_ore">Convertito Ore</option>
+              <option value="task_creata">Task Recupero</option>
+            </select>
+          </div>
+
+          {/* Risorsa */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Risorsa
+            </label>
+            <select
+              value={filters.risorsa_id}
+              onChange={(e) => setFilters({...filters, risorsa_id: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tutte</option>
+              {risorse.map(risorsa => (
+                <option key={risorsa.id} value={risorsa.id}>
+                  {risorsa.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Manager */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Gestito Da
+            </label>
+            <select
+              value={filters.gestito_da}
+              onChange={(e) => setFilters({...filters, gestito_da: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tutti</option>
+              {managers.map(manager => (
+                <option key={manager.id} value={manager.id}>
+                  {manager.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Data Inizio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Da
+            </label>
             <input
               type="date"
               value={filters.data_inizio}
@@ -259,8 +279,11 @@ const annullaRiassegnazione = async (id) => {
             />
           </div>
 
+          {/* Data Fine */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data Fine</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              A
+            </label>
             <input
               type="date"
               value={filters.data_fine}
@@ -268,51 +291,39 @@ const annullaRiassegnazione = async (id) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Cerca</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Task, risorsa, progetto..."
-                value={filters.search}
-                onChange={(e) => setFilters({...filters, search: e.target.value})}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+        {/* Reset Filters */}
+        {Object.values(filters).some(v => v !== '') && (
+          <div className="mt-4">
+            <button
+              onClick={() => setFilters({
+                tipo: '',
+                stato_gestione: '',
+                risorsa_id: '',
+                gestito_da: '',
+                data_inizio: '',
+                data_fine: ''
+              })}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Azzera Filtri
+            </button>
           </div>
-        </div>
-
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => setFilters({
-              stato: '', risorsa_id: '', progetto_id: '', data_inizio: '', data_fine: '', search: ''
-            })}
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm"
-          >
-            Reset Filtri
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Riassegnazioni Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Riassegnazioni ({riassegnazioni.length})
-          </h3>
-        </div>
-
+      {/* Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : riassegnazioni.length === 0 ? (
+        ) : bonusStorico.length === 0 ? (
           <div className="text-center py-12">
-            <ArrowRightLeft className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h4 className="text-lg font-medium text-gray-600 mb-2">Nessuna Riassegnazione</h4>
-            <p className="text-gray-500">Non ci sono riassegnazioni che corrispondono ai filtri selezionati.</p>
+            <Award className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-gray-600 mb-2">Nessun Bonus Gestito</h4>
+            <p className="text-gray-500">Non ci sono bonus che corrispondono ai filtri selezionati.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -320,135 +331,139 @@ const annullaRiassegnazione = async (id) => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data
+                    Data Gestione
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Da Task
+                    Risorsa
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    A Task
+                    Task
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tipo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Ore
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Valore
+                    Importo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stato
+                    Azione
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Manager
+                    Gestito Da
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Azioni
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {riassegnazioni.map((riassegnazione, index) => (
+              <tbody className="divide-y divide-gray-200">
+                {bonusStorico.map((bonus, index) => (
                   <motion.tr
-                    key={riassegnazione.riassegnazione_id}
+                    key={bonus.bonus_id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                     className="hover:bg-gray-50"
                   >
+                    {/* Data Gestione */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center">
-                        <Calendar size={14} className="text-gray-400 mr-2" />
-                        {formatDate(riassegnazione.data_riassegnazione)}
-                      </div>
-                    </td>
-                    
-                    {/* MODIFICATA: Colonna Da Task con Badge Cliente BLU */}
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      <div>
-                        <div className="font-medium">{riassegnazione.task_sorgente_nome}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-md">
-                            {riassegnazione.cliente_sorgente_nome}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {riassegnazione.risorsa_sorgente_nome} • {riassegnazione.progetto_sorgente_nome}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar size={16} className="text-gray-400" />
+                        {formatDate(bonus.data_gestione)}
                       </div>
                     </td>
 
-                    {/* MODIFICATA: Colonna A Task con Badge Cliente VERDE */}
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      <div>
-                        <div className="font-medium">
-                          {riassegnazione.task_destinazione_nome || 'Nuova Task'}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-md">
-                            {riassegnazione.cliente_destinazione_nome}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {riassegnazione.risorsa_destinazione_nome || '—'} • {riassegnazione.progetto_destinazione_nome}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center text-blue-600">
-                        <ArrowRightLeft size={14} className="mr-1" />
-                        {formatTime(riassegnazione.minuti_assegnati)}
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                      {formatCurrency(riassegnazione.valore_riassegnazione || 0)}
-                    </td>
-
+                    {/* Risorsa */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {riassegnazione.stato === 'attiva' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <CheckCircle size={12} className="mr-1" />
-                          Attiva
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          <XCircle size={12} className="mr-1" />
-                          Annullata
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <User size={16} className="text-gray-400" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {bonus.risorsa.nome}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {bonus.cliente.nome}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Task */}
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900 max-w-xs truncate">
+                        {bonus.task.nome}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {bonus.progetto.nome}
+                      </div>
+                    </td>
+
+                    {/* Tipo */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTipoBadge(bonus.tipo)}`}>
+                        {getTipoLabel(bonus.tipo)}
+                      </span>
+                    </td>
+
+                    {/* Ore */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        <div>Est: {bonus.ore_stimate_ore}h</div>
+                        <div>Eff: {bonus.ore_effettive_ore}h</div>
+                        <div className={`font-medium ${
+                          parseFloat(bonus.differenza_ore_ore) > 0 ? 'text-green-600' : 
+                          parseFloat(bonus.differenza_ore_ore) < 0 ? 'text-red-600' : 
+                          'text-gray-600'
+                        }`}>
+                          Δ {bonus.differenza_ore_ore}h
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Importo */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm font-bold ${
+                        bonus.importo_bonus > 0 ? 'text-green-600' : 
+                        bonus.importo_bonus < 0 ? 'text-red-600' : 
+                        'text-gray-600'
+                      }`}>
+                        {formatCurrency(bonus.importo_bonus)}
+                      </div>
+                      {bonus.percentuale_bonus > 0 && (
+                        <div className="text-xs text-gray-500">
+                          {bonus.percentuale_bonus}%
+                        </div>
                       )}
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center">
-                        <User size={14} className="text-gray-400 mr-2" />
-                        {riassegnazione.manager_nome}
+                    {/* Azione */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getAzioneBadge(bonus.stato_gestione)}`}>
+                        {bonus.azione_descrizione}
+                      </span>
+                    </td>
+
+                    {/* Gestito Da */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {bonus.manager ? bonus.manager.nome : '-'}
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedRiassegnazione(riassegnazione);
-                            setShowDetails(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        
-                        {riassegnazione.stato === 'attiva' && (
-                          <button
-                            onClick={() => {
-                              setSelectedRiassegnazione(riassegnazione);
-                              setShowAnnullaModal(true);
-                            }}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            <X size={16} />
-                          </button>
-                        )}
-                      </div>
+                    {/* Azioni */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => {
+                          setSelectedBonus(bonus);
+                          setShowDetails(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Eye size={18} />
+                      </button>
                     </td>
                   </motion.tr>
                 ))}
@@ -461,20 +476,20 @@ const annullaRiassegnazione = async (id) => {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-700">
-              Pagina {currentPage} di {totalPages}
+              Pagina {currentPage} di {totalPages} ({totalBonus} totali)
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => fetchStorico(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 hover:bg-gray-50"
               >
                 Precedente
               </button>
               <button
                 onClick={() => fetchStorico(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 hover:bg-gray-50"
               >
                 Successiva
               </button>
@@ -483,14 +498,14 @@ const annullaRiassegnazione = async (id) => {
         )}
       </div>
 
-      {/* Details Modal */}
+      {/* Modal Dettagli */}
       <AnimatePresence>
-        {showDetails && selectedRiassegnazione && (
+        {showDetails && selectedBonus && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowDetails(false)}
           >
             <motion.div
@@ -498,152 +513,195 @@ const annullaRiassegnazione = async (id) => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Dettagli Riassegnazione</h3>
-                  <button
-                    onClick={() => setShowDetails(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={24} />
-                  </button>
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h3 className="text-xl font-bold text-gray-900">Dettagli Bonus</h3>
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-6">
+                {/* Informazioni Risorsa */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Risorsa</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Nome:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.risorsa.nome}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Email:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.risorsa.email}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-6">
-                  {/* Timeline */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1 p-3 bg-green-100 rounded-lg">
-                        <p className="text-sm text-gray-600">DA:</p>
-                        <p className="font-semibold">{selectedRiassegnazione.task_sorgente_nome}</p>
-                        <p className="text-sm text-green-600">-{formatTime(selectedRiassegnazione.minuti_prelevati)}</p>
-                      </div>
-                      
-                      <ArrowRightLeft className="w-6 h-6 text-gray-400" />
-                      
-                      <div className="flex-1 p-3 bg-blue-100 rounded-lg">
-                        <p className="text-sm text-gray-600">A:</p>
-                        <p className="font-semibold">
-                          {selectedRiassegnazione.task_destinazione_nome || 'Nuova Task'}
-                        </p>
-                        <p className="text-sm text-blue-600">+{formatTime(selectedRiassegnazione.minuti_assegnati)}</p>
-                      </div>
+                {/* Informazioni Task */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Task Originale</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Nome:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.task.nome}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Cliente:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.cliente.nome}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Progetto:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.progetto.nome}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Attività:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.attivita.nome}</span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Info */}
-                  <div className="grid md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Data Riassegnazione:</p>
-                      <p className="font-medium">{formatDate(selectedRiassegnazione.data_riassegnazione)}</p>
+                {/* Calcoli Ore */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Calcoli Ore</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Ore Stimate:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.ore_stimate_ore}h</span>
                     </div>
-                    <div>
-                      <p className="text-gray-500">Manager:</p>
-                      <p className="font-medium">{selectedRiassegnazione.manager_nome}</p>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Ore Effettive:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.ore_effettive_ore}h</span>
                     </div>
-                    <div>
-                      <p className="text-gray-500">Stato:</p>
-                      <p className={`font-medium ${
-                        selectedRiassegnazione.stato === 'attiva' ? 'text-green-600' : 'text-red-600'
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Differenza:</span>
+                      <span className={`text-sm font-bold ${
+                        parseFloat(selectedBonus.differenza_ore_ore) > 0 ? 'text-green-600' : 
+                        parseFloat(selectedBonus.differenza_ore_ore) < 0 ? 'text-red-600' : 
+                        'text-gray-600'
                       }`}>
-                        {selectedRiassegnazione.stato === 'attiva' ? 'Attiva' : 'Annullata'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Valore:</p>
-                      <p className="font-medium text-green-600">
-                        {formatCurrency(selectedRiassegnazione.valore_riassegnazione || 0)}
-                      </p>
+                        {selectedBonus.differenza_ore_ore}h
+                      </span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Motivo */}
+                {/* Calcoli Economici */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Calcoli Economici</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Tipo:</span>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTipoBadge(selectedBonus.tipo)}`}>
+                        {getTipoLabel(selectedBonus.tipo)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Percentuale Bonus:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedBonus.percentuale_bonus}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Costo Orario Base:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatCurrency(selectedBonus.costo_orario_base)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Costo Orario Finale:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatCurrency(selectedBonus.costo_orario_finale)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-200">
+                      <span className="text-sm font-semibold text-gray-700">Importo Bonus:</span>
+                      <span className={`text-lg font-bold ${
+                        selectedBonus.importo_bonus > 0 ? 'text-green-600' : 
+                        selectedBonus.importo_bonus < 0 ? 'text-red-600' : 
+                        'text-gray-600'
+                      }`}>
+                        {formatCurrency(selectedBonus.importo_bonus)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Gestione */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Gestione</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Azione:</span>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getAzioneBadge(selectedBonus.stato_gestione)}`}>
+                        {selectedBonus.azione_descrizione}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Data Gestione:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_gestione)}</span>
+                    </div>
+                    {selectedBonus.manager && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Gestito Da:</span>
+                        <span className="text-sm font-medium text-gray-900">{selectedBonus.manager.nome}</span>
+                      </div>
+                    )}
+                    {selectedBonus.note_gestione && (
+                      <div className="pt-2 border-t border-gray-200">
+                        <span className="text-sm text-gray-600">Note:</span>
+                        <p className="text-sm text-gray-900 mt-1">{selectedBonus.note_gestione}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Task di Recupero (se presente) */}
+                {selectedBonus.task_recupero && (
                   <div>
-                    <p className="text-gray-500 mb-2">Motivo:</p>
-                    <p className="bg-gray-50 p-3 rounded-lg text-sm">
-                      {selectedRiassegnazione.motivo || 'Nessun motivo specificato'}
-                    </p>
-                  </div>
-
-                  {/* Annullamento info */}
-                  {selectedRiassegnazione.stato === 'annullata' && (
-                    <div className="bg-red-50 p-4 rounded-lg">
-                      <h4 className="font-semibold text-red-900 mb-2">Informazioni Annullamento</h4>
-                      <div className="text-sm space-y-1">
-                        <p><span className="text-red-700">Data:</span> {formatDate(selectedRiassegnazione.data_annullamento)}</p>
-                        <p><span className="text-red-700">Annullata da:</span> {selectedRiassegnazione.annullato_da_nome}</p>
-                        <p><span className="text-red-700">Motivo:</span> {selectedRiassegnazione.motivo_annullamento}</p>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Task di Recupero</h4>
+                    <div className="bg-purple-50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Nome:</span>
+                        <span className="text-sm font-medium text-gray-900">{selectedBonus.task_recupero.nome}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Stato:</span>
+                        <span className="text-sm font-medium text-gray-900">{selectedBonus.task_recupero.stato}</span>
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {/* Timeline */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Timeline</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Creazione:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_creazione)}</span>
+                    </div>
+                    {selectedBonus.data_approvazione && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Approvazione:</span>
+                        <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_approvazione)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Gestione:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_gestione)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* Annulla Modal */}
-      <AnimatePresence>
-        {showAnnullaModal && selectedRiassegnazione && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-            onClick={() => setShowAnnullaModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl shadow-2xl max-w-md w-full"
-            >
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <AlertCircle className="w-6 h-6 text-red-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Annulla Riassegnazione</h3>
-                </div>
-
-                <p className="text-gray-600 mb-4">
-                  Sei sicuro di voler annullare questa riassegnazione? Questa azione non può essere annullata.
-                </p>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Motivo annullamento:
-                  </label>
-                  <textarea
-                    value={motivoAnnullamento}
-                    onChange={(e) => setMotivoAnnullamento(e.target.value)}
-                    placeholder="Inserisci il motivo dell'annullamento..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                    rows={3}
-                    required
-                  />
-                </div>
-
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => {
-                      setShowAnnullaModal(false);
-                      setMotivoAnnullamento('');
-                    }}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  >
-                    Annulla
-                  </button>
-                  <button
-                    onClick={() => annullaRiassegnazione(selectedRiassegnazione.riassegnazione_id)}
-                    disabled={!motivoAnnullamento.trim()}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg disabled:bg-gray-400"
-                  >
-                    Conferma Annullamento
-                  </button>
-                </div>
+              {/* Footer */}
+              <div className="p-6 border-t border-gray-200 flex justify-end">
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg"
+                >
+                  Chiudi
+                </button>
               </div>
             </motion.div>
           </motion.div>

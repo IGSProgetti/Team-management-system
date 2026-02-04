@@ -1131,6 +1131,272 @@ router.post('/:id/crea-task-recupero', authenticateToken, requireManager, param(
   }
 });
 
+// =====================================================
+// NUOVO ENDPOINT: GET /api/bonus/storico-gestione
+// Recupera lo storico completo dei bonus gestiti
+// =====================================================
 
+// GET /api/bonus/storico-gestione - Storico completo bonus gestiti
+router.get('/storico-gestione', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const { 
+      tipo = null,              // 'positivo' | 'negativo' | 'zero'
+      stato_gestione = null,    // 'pagato' | 'convertito_ore' | 'task_creata'
+      risorsa_id = null,        // Filtra per risorsa specifica
+      gestito_da = null,        // Filtra per manager che ha gestito
+      data_inizio = null,       // Data inizio periodo
+      data_fine = null,         // Data fine periodo
+      limit = 50,
+      offset = 0
+    } = req.query;
+
+    console.log('[BONUS STORICO] Fetching storico with filters:', req.query);
+
+    // Costruisci WHERE dinamico
+    let whereConditions = ["stato_gestione != 'non_gestito'"]; // Solo bonus gestiti
+    let params = [];
+    let paramIndex = 1;
+
+    if (tipo) {
+      whereConditions.push(`b.tipo = $${paramIndex}`);
+      params.push(tipo);
+      paramIndex++;
+    }
+
+    if (stato_gestione) {
+      whereConditions.push(`b.stato_gestione = $${paramIndex}`);
+      params.push(stato_gestione);
+      paramIndex++;
+    }
+
+    if (risorsa_id) {
+      whereConditions.push(`b.risorsa_id = $${paramIndex}`);
+      params.push(risorsa_id);
+      paramIndex++;
+    }
+
+    if (gestito_da) {
+      whereConditions.push(`b.gestito_da = $${paramIndex}`);
+      params.push(gestito_da);
+      paramIndex++;
+    }
+
+    if (data_inizio) {
+      whereConditions.push(`b.data_gestione >= $${paramIndex}`);
+      params.push(data_inizio);
+      paramIndex++;
+    }
+
+    if (data_fine) {
+      whereConditions.push(`b.data_gestione <= $${paramIndex}`);
+      params.push(data_fine);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 
+      ? `WHERE ${whereConditions.join(' AND ')}` 
+      : '';
+
+    // Query principale con JOIN per ottenere tutti i dettagli
+    const storicoQuery = `
+      SELECT 
+        b.id as bonus_id,
+        b.tipo,
+        b.stato,
+        b.stato_gestione,
+        b.ore_stimate,
+        b.ore_effettive,
+        b.differenza_ore,
+        b.importo_bonus,
+        b.percentuale_bonus,
+        b.costo_orario_base,
+        b.costo_orario_finale,
+        b.data_creazione,
+        b.data_approvazione,
+        b.data_gestione,
+        b.note_gestione,
+        b.commento_manager,
+        
+        -- Dettagli risorsa (di chi erano le ore)
+        u.id as risorsa_id,
+        u.nome as risorsa_nome,
+        u.email as risorsa_email,
+        
+        -- Dettagli manager (chi ha gestito)
+        m.id as manager_id,
+        m.nome as manager_nome,
+        m.email as manager_email,
+        
+        -- Dettagli task originale
+        t.id as task_id,
+        t.nome as task_nome,
+        t.descrizione as task_descrizione,
+        
+        -- Dettagli attività
+        a.id as attivita_id,
+        a.nome as attivita_nome,
+        
+        -- Dettagli progetto
+        p.id as progetto_id,
+        p.nome as progetto_nome,
+        
+        -- Dettagli cliente
+        c.id as cliente_id,
+        c.nome as cliente_nome,
+        
+        -- Task di recupero (se creata)
+        tr.id as task_recupero_id,
+        tr.nome as task_recupero_nome,
+        tr.stato as task_recupero_stato
+        
+      FROM bonus_risorse b
+      
+      -- JOIN obbligatori
+      JOIN utenti u ON b.risorsa_id = u.id
+      JOIN task t ON b.task_id = t.id
+      JOIN attivita a ON t.attivita_id = a.id
+      JOIN progetti p ON a.progetto_id = p.id
+      JOIN clienti c ON p.cliente_id = c.id
+      
+      -- JOIN opzionali
+      LEFT JOIN utenti m ON b.gestito_da = m.id
+      LEFT JOIN task tr ON b.task_recupero_id = tr.id
+      
+      ${whereClause}
+      ORDER BY b.data_gestione DESC NULLS LAST, b.data_creazione DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    params.push(parseInt(limit));
+    params.push(parseInt(offset));
+
+    const result = await query(storicoQuery, params);
+
+    // Count totale per paginazione
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM bonus_risorse b
+      ${whereClause}
+    `;
+    
+    const countResult = await query(countQuery, params.slice(0, -2)); // Rimuovi limit/offset
+    
+    console.log(`[BONUS STORICO] Found ${result.rows.length} bonus gestiti`);
+
+    // Formatta i risultati
+    const bonusFormattati = result.rows.map(row => ({
+      bonus_id: row.bonus_id,
+      tipo: row.tipo,
+      stato: row.stato,
+      stato_gestione: row.stato_gestione,
+      
+      // Ore e calcoli
+      ore_stimate_minuti: row.ore_stimate,
+      ore_effettive_minuti: row.ore_effettive,
+      differenza_ore_minuti: row.differenza_ore,
+      ore_stimate_ore: (row.ore_stimate / 60).toFixed(2),
+      ore_effettive_ore: (row.ore_effettive / 60).toFixed(2),
+      differenza_ore_ore: (row.differenza_ore / 60).toFixed(2),
+      
+      // Importi
+      importo_bonus: parseFloat(row.importo_bonus),
+      percentuale_bonus: parseFloat(row.percentuale_bonus),
+      costo_orario_base: parseFloat(row.costo_orario_base),
+      costo_orario_finale: parseFloat(row.costo_orario_finale),
+      
+      // Date
+      data_creazione: row.data_creazione,
+      data_approvazione: row.data_approvazione,
+      data_gestione: row.data_gestione,
+      
+      // Note
+      note_gestione: row.note_gestione,
+      commento_manager: row.commento_manager,
+      
+      // Risorsa (di chi erano le ore)
+      risorsa: {
+        id: row.risorsa_id,
+        nome: row.risorsa_nome,
+        email: row.risorsa_email
+      },
+      
+      // Manager (chi ha gestito)
+      manager: row.manager_id ? {
+        id: row.manager_id,
+        nome: row.manager_nome,
+        email: row.manager_email
+      } : null,
+      
+      // Task originale
+      task: {
+        id: row.task_id,
+        nome: row.task_nome,
+        descrizione: row.task_descrizione
+      },
+      
+      // Attività
+      attivita: {
+        id: row.attivita_id,
+        nome: row.attivita_nome
+      },
+      
+      // Progetto
+      progetto: {
+        id: row.progetto_id,
+        nome: row.progetto_nome
+      },
+      
+      // Cliente
+      cliente: {
+        id: row.cliente_id,
+        nome: row.cliente_nome
+      },
+      
+      // Task di recupero (se esiste)
+      task_recupero: row.task_recupero_id ? {
+        id: row.task_recupero_id,
+        nome: row.task_recupero_nome,
+        stato: row.task_recupero_stato
+      } : null,
+      
+      // Label descrittiva dell'azione
+      azione_descrizione: getAzioneDescrizione(row.tipo, row.stato_gestione)
+    }));
+
+    res.json({
+      success: true,
+      bonus: bonusFormattati,
+      total: parseInt(countResult.rows[0].total),
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      has_more: (parseInt(offset) + result.rows.length) < parseInt(countResult.rows[0].total)
+    });
+
+  } catch (error) {
+    console.error('[BONUS STORICO] Error fetching storico:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Server Error', 
+      details: error.message 
+    });
+  }
+});
+
+// Helper function per generare descrizione azione
+function getAzioneDescrizione(tipo, stato_gestione) {
+  if (stato_gestione === 'pagato') {
+    return '💰 Bonus Pagato';
+  }
+  if (stato_gestione === 'convertito_ore') {
+    return '🔄 Convertito in Ore Disponibili';
+  }
+  if (stato_gestione === 'task_creata') {
+    return '📋 Task di Recupero Creata';
+  }
+  if (stato_gestione === 'non_gestito') {
+    return '⏳ Non Gestito';
+  }
+  return '❓ Azione Sconosciuta';
+}
 
 module.exports = router;
