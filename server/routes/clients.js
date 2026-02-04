@@ -125,6 +125,45 @@ RETURNING *
   }
 });
 
+// GET /api/clienti/risorsa/:risorsaId/assegnati - Clienti assegnati a una risorsa
+router.get('/risorsa/:risorsaId/assegnati', authenticateToken, async (req, res) => {
+  try {
+    const { risorsaId } = req.params;
+
+    console.log(`📊 Recupero clienti assegnati per risorsa: ${risorsaId}`);
+
+    const result = await query(`
+      SELECT 
+        c.id,
+        c.nome,
+        c.descrizione,
+        acr.ore_assegnate,
+        acr.costo_orario_finale,
+        acr.budget_risorsa,
+        acr.data_assegnazione
+      FROM clienti c
+      JOIN assegnazione_cliente_risorsa acr ON c.id = acr.cliente_id
+      WHERE acr.risorsa_id = $1
+        AND c.attivo = true
+      ORDER BY c.nome ASC
+    `, [risorsaId]);
+
+    console.log(`✅ Trovati ${result.rows.length} clienti per risorsa ${risorsaId}`);
+
+    res.json({
+      clienti: result.rows,
+      count: result.rows.length
+    });
+
+  } catch (error) {
+    console.error('Errore recupero clienti assegnati:', error);
+    res.status(500).json({ 
+      error: 'Errore nel recupero dei clienti assegnati', 
+      details: error.message 
+    });
+  }
+});
+
 // GET /api/clients/:id - Dettagli cliente specifico (BYPASS AUTH)
 router.get('/:id', bypassAuth, validateUUID('id'), async (req, res) => {
   try {
@@ -372,8 +411,6 @@ await client.query(`
     });
   }
 });
-
-
 
 
 module.exports = router;

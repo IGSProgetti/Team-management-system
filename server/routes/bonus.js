@@ -753,6 +753,7 @@ function buildResourceHierarchyWithTotals(rows) {
               stato: row.bonus_stato,
               stato_gestione: row.stato_gestione,
               azione_negativo: row.azione_negativo,
+              risorsa_id: row.risorsa_id,
               data_creazione: row.bonus_data_creazione,
               data_approvazione: row.data_approvazione,
               commento_manager: row.commento_manager
@@ -848,7 +849,12 @@ router.put('/:id/paga', authenticateToken, requireManager, param('id').isUUID(),
   }
 });
 
-// PUT /api/bonus/:id/converti-ore - Converte penalità in ore (APPROVA + CONVERTI)
+// =====================================================
+// FIX ENDPOINT: PUT /api/bonus/:id/converti-ore
+// Questo codice SOSTITUISCE l'endpoint esistente in server/routes/bonus.js
+// =====================================================
+
+// PUT /api/bonus/:id/converti-ore - Converte penalità in ore per cliente (APPROVA + CONVERTI)
 router.put('/:id/converti-ore', authenticateToken, requireManager, param('id').isUUID(), async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -857,34 +863,94 @@ router.put('/:id/converti-ore', authenticateToken, requireManager, param('id').i
     }
 
     const { id } = req.params;
-    const { note } = req.body;
+    const { cliente_id, note } = req.body; // ← NUOVO: serve cliente_id!
 
+    // Validazione cliente_id
+    if (!cliente_id) {
+      return res.status(400).json({ error: 'Cliente destinazione obbligatorio' });
+    }
+
+    // Recupera bonus
     const bonusCheck = await query('SELECT * FROM bonus_risorse WHERE id = $1', [id]);
     if (bonusCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Bonus non trovato' });
     }
 
-    if (!['pending', 'approvato'].includes(bonusCheck.rows[0].stato)) {
+    const bonus = bonusCheck.rows[0];
+
+    // Validazioni stato
+    if (!['pending', 'approvato'].includes(bonus.stato)) {
       return res.status(400).json({ error: 'Penalità già gestita o rifiutata' });
     }
 
-    if (bonusCheck.rows[0].tipo !== 'negativo') {
+    if (bonus.tipo !== 'negativo') {
       return res.status(400).json({ error: 'Solo le penalità possono essere convertite in ore' });
     }
 
-    if (bonusCheck.rows[0].stato === 'approvato' && bonusCheck.rows[0].stato_gestione !== 'non_gestito') {
+    if (bonus.stato === 'approvato' && bonus.stato_gestione !== 'non_gestito') {
       return res.status(400).json({ error: 'Penalità già gestita precedentemente' });
     }
 
-    const oreInMinuti = Math.abs(bonusCheck.rows[0].differenza_ore);
-    const oreInOre = oreInMinuti / 60;
-    
-    await query(`
-      UPDATE utenti 
-      SET ore_annue_tesoretto = ore_annue_tesoretto + $1
-      WHERE id = $2
-    `, [oreInOre, bonusCheck.rows[0].risorsa_id]);
+    // =====================================================
+    // STEP 1: Verifica che la risorsa sia assegnata al cliente
+    // =====================================================
+    const assegnazioneCheck = await query(`
+      SELECT * FROM assegnazione_cliente_risorsa
+      WHERE cliente_id = $1 AND risorsa_id = $2
+    `, [cliente_id, bonus.risorsa_id]);
 
+    if (assegnazioneCheck.rows.length === 0) {
+      return res.status(400).json({ 
+        error: 'Risorsa non assegnata al cliente selezionato' 
+      });
+    }
+
+    const assegnazione = assegnazioneCheck.rows[0];
+
+    // =====================================================
+    // STEP 2: Calcola ore da spostare (minuti → ore)
+    // =====================================================
+    const minutiDaSpostare = Math.abs(bonus.differenza_ore);
+    const oreInOre = minutiDaSpostare / 60.0;
+
+    console.log(`🔄 Conversione ore:`, {
+      bonus_id: id,
+      minuti: minutiDaSpostare,
+      ore: oreInOre,
+      risorsa: bonus.risorsa_id,
+      cliente_destinazione: cliente_id
+    });
+
+    // =====================================================
+    // STEP 3: Aggiorna assegnazione_cliente_risorsa
+    // =====================================================
+    const nuoveOreAssegnate = parseFloat(assegnazione.ore_assegnate) + oreInOre;
+    const nuovoBudget = nuoveOreAssegnate * parseFloat(assegnazione.costo_orario_finale);
+
+    await query(`
+      UPDATE assegnazione_cliente_risorsa
+      SET 
+        ore_assegnate = $1,
+        budget_risorsa = $2,
+        data_aggiornamento = CURRENT_TIMESTAMP
+      WHERE cliente_id = $3 AND risorsa_id = $4
+    `, [
+      nuoveOreAssegnate.toFixed(2),
+      nuovoBudget.toFixed(2),
+      cliente_id,
+      bonus.risorsa_id
+    ]);
+
+    console.log(`✅ Assegnazione aggiornata:`, {
+      ore_prima: assegnazione.ore_assegnate,
+      ore_dopo: nuoveOreAssegnate.toFixed(2),
+      budget_prima: assegnazione.budget_risorsa,
+      budget_dopo: nuovoBudget.toFixed(2)
+    });
+
+    // =====================================================
+    // STEP 4: Marca bonus come gestito
+    // =====================================================
     const result = await query(`
       UPDATE bonus_risorse 
       SET 
@@ -897,34 +963,57 @@ router.put('/:id/converti-ore', authenticateToken, requireManager, param('id').i
         note_gestione = $2
       WHERE id = $3
       RETURNING *
-    `, [req.user.id, note || `Penalità convertita in ${oreInOre.toFixed(2)}h disponibili`, id]);
+    `, [
+      req.user.id, 
+      note || `Penalità convertita in ${oreInOre.toFixed(2)}h per cliente`,
+      id
+    ]);
 
+    // =====================================================
+    // STEP 5: Log redistribuzione
+    // =====================================================
     await query(`
       INSERT INTO log_redistribuzione_ore (
-        manager_id, tipo_azione, ore_spostate, commento, dettagli_json
+        manager_id, 
+        tipo_azione, 
+        da_risorsa_id,
+        a_risorsa_id,
+        ore_spostate, 
+        commento, 
+        dettagli_json
       )
-      VALUES ($1, 'conversione_penalita_ore', $2, $3, $4)
+      VALUES ($1, 'conversione_penalita_ore', $2, $2, $3, $4, $5)
     `, [
       req.user.id,
+      bonus.risorsa_id, // stessa risorsa (da e a)
       oreInOre,
-      note || `Penalità approvata e convertita in ${oreInOre.toFixed(2)}h tesoretto`,
+      note || `Penalità convertita in ${oreInOre.toFixed(2)}h per cliente`,
       JSON.stringify({ 
         bonus_id: id, 
-        risorsa_id: bonusCheck.rows[0].risorsa_id,
-        ore_aggiunte: oreInOre
+        risorsa_id: bonus.risorsa_id,
+        cliente_destinazione: cliente_id,
+        minuti_spostati: minutiDaSpostare,
+        ore_aggiunte: oreInOre,
+        nuovo_totale_ore: nuoveOreAssegnate
       })
     ]);
 
-    console.log(`✅ Penalità ${id} approvata e convertita in ${oreInOre}h`);
+    console.log(`✅ Penalità ${id} convertita in ${oreInOre.toFixed(2)}h per cliente ${cliente_id}`);
+
     res.json({ 
-      message: `Penalità approvata e convertita in ${oreInOre.toFixed(2)}h disponibili`,
+      message: `Penalità convertita in ${oreInOre.toFixed(2)}h disponibili per il cliente`,
       bonus: result.rows[0],
-      ore_aggiunte: oreInOre
+      ore_aggiunte: oreInOre,
+      cliente_id: cliente_id,
+      nuove_ore_totali: nuoveOreAssegnate
     });
 
   } catch (error) {
     console.error('Converti ore error:', error);
-    res.status(500).json({ error: 'Errore nella conversione in ore', details: error.message });
+    res.status(500).json({ 
+      error: 'Errore nella conversione in ore', 
+      details: error.message 
+    });
   }
 });
 

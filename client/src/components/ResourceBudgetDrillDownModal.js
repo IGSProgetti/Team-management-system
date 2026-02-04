@@ -6,6 +6,8 @@ import {
   TrendingDown, AlertCircle, Layers, Gift, Minus
 } from 'lucide-react';
 import api from '../utils/api';
+import ConvertiOreModal from './ConvertiOreModal';
+
 
 const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
   const [loading, setLoading] = useState(true);
@@ -18,6 +20,8 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
   // State per modal creazione task
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [taskDataForModal, setTaskDataForModal] = useState(null);
+  const [convertiOreModalOpen, setConvertiOreModalOpen] = useState(false);
+  const [bonusSelezionato, setBonusSelezionato] = useState(null);
 
   useEffect(() => {
     fetchDrillDown();
@@ -173,6 +177,8 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
                   fetchDrillDown={fetchDrillDown}
                   setTaskDataForModal={setTaskDataForModal}
                   setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
                 />
               ))}
             </div>
@@ -204,6 +210,18 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
           }}
         />
       )}
+
+      {/* Modale Converti Ore */}
+      <ConvertiOreModal
+        isOpen={convertiOreModalOpen}
+        onClose={() => setConvertiOreModalOpen(false)}
+        bonus={bonusSelezionato}
+        onSuccess={(data) => {
+          alert(`✅ ${data.message}\nOre aggiunte: ${data.ore_aggiunte.toFixed(2)}h\nCliente: ${data.cliente_id}`);
+          setConvertiOreModalOpen(false);
+          fetchDrillDown();
+        }}
+      />
     </div>
   );
 };
@@ -237,7 +255,9 @@ const ClienteSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali ore preventivate e effettive
@@ -312,6 +332,8 @@ const ClienteSection = ({
                   fetchDrillDown={fetchDrillDown}
                   setTaskDataForModal={setTaskDataForModal}
                   setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
                 />
               ))}
             </div>
@@ -337,7 +359,9 @@ const ProgettoSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali
@@ -409,6 +433,8 @@ const ProgettoSection = ({
                     fetchDrillDown={fetchDrillDown}
                     setTaskDataForModal={setTaskDataForModal}
                     setShowCreateTaskModal={setShowCreateTaskModal}
+                    setBonusSelezionato={setBonusSelezionato}
+                    setConvertiOreModalOpen={setConvertiOreModalOpen}
                   />
                 ))
               )}
@@ -433,7 +459,9 @@ const AreaSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali
@@ -498,6 +526,8 @@ const AreaSection = ({
                     fetchDrillDown={fetchDrillDown}
                     setTaskDataForModal={setTaskDataForModal}
                     setShowCreateTaskModal={setShowCreateTaskModal}
+                    setBonusSelezionato={setBonusSelezionato}
+                    setConvertiOreModalOpen={setConvertiOreModalOpen}
                   />
                 ))
               )}
@@ -520,7 +550,9 @@ const AttivitaSection = ({
   formatCurrency,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali dalle task
@@ -582,6 +614,8 @@ const AttivitaSection = ({
                   fetchDrillDown={fetchDrillDown}
                   setTaskDataForModal={setTaskDataForModal}
                   setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
                 />
               )}
             </div>
@@ -601,7 +635,9 @@ const TaskTableView = ({
   getStatusColor, 
   fetchDrillDown, 
   setTaskDataForModal, 
-  setShowCreateTaskModal 
+  setShowCreateTaskModal, 
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   // Calcola totali - SOLO bonus NON ancora gestiti (guarda solo stato_gestione)
 const totaleBonus = tasks.reduce((sum, task) => {
@@ -711,15 +747,11 @@ const totaleBonusGestito = tasks.reduce((sum, task) => {
                       {task.bonus.tipo === 'negativo' && (
                         <>
                           <button
-                            onClick={async () => {
-                              if (!window.confirm('Confermi di voler convertire questa penalità in ore disponibili? (Verrà automaticamente approvata)')) return;
-                              try {
-                                const res = await api.put(`/bonus/${task.bonus.id}/converti-ore`, { note: 'Convertito in ore' });
-                                alert(`✅ Penalità approvata! Aggiunte ${res.data.ore_aggiunte.toFixed(2)}h al tesoretto!`);
-                                fetchDrillDown();
-                              } catch (err) {
-                                alert(err.response?.data?.error || 'Errore nella conversione');
-                              }
+                            onClick={() => {
+                              console.log('🔘 Click su Converti Ore!'); // ← AGGIUNGI QUESTO
+                              console.log('📦 Bonus selezionato:', task.bonus); // ← AGGIUNGI QUESTO
+                              setBonusSelezionato(task.bonus);
+                              setConvertiOreModalOpen(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition"
                           >
