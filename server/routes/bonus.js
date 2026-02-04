@@ -567,6 +567,7 @@ router.get('/resource/:risorsaId', authenticateToken, async (req, res) => {
         b.percentuale_bonus,
         b.costo_orario_finale as bonus_costo_orario_finale,
         b.stato as bonus_stato,
+        b.stato_gestione,
         b.azione_negativo,
         b.manager_id,
         b.data_approvazione,
@@ -750,6 +751,7 @@ function buildResourceHierarchyWithTotals(rows) {
               percentuale_bonus: parseFloat(row.percentuale_bonus) || 0,
               costo_orario_finale: parseFloat(row.bonus_costo_orario_finale) || 0,
               stato: row.bonus_stato,
+              stato_gestione: row.stato_gestione,
               azione_negativo: row.azione_negativo,
               data_creazione: row.bonus_data_creazione,
               data_approvazione: row.data_approvazione,
@@ -774,8 +776,272 @@ function buildResourceHierarchyWithTotals(rows) {
   }));
 }
 
+
+
 // =====================================================
-// FINE CODICE DA AGGIUNGERE
+// GESTIONE BONUS/PENALITÀ - Nuovi Endpoint
 // =====================================================
+
+// PUT /api/bonus/:id/paga - Marca bonus come pagato (APPROVA + PAGA)
+router.put('/:id/paga', authenticateToken, requireManager, param('id').isUUID(), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { note } = req.body;
+
+    const bonusCheck = await query('SELECT * FROM bonus_risorse WHERE id = $1', [id]);
+    if (bonusCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Bonus non trovato' });
+    }
+
+    if (!['pending', 'approvato'].includes(bonusCheck.rows[0].stato)) {
+      return res.status(400).json({ error: 'Bonus già gestito o rifiutato' });
+    }
+
+    if (bonusCheck.rows[0].tipo === 'negativo') {
+      return res.status(400).json({ error: 'Le penalità non possono essere pagate' });
+    }
+
+    if (bonusCheck.rows[0].stato === 'approvato' && bonusCheck.rows[0].stato_gestione !== 'non_gestito') {
+      return res.status(400).json({ error: 'Bonus già gestito precedentemente' });
+    }
+
+    const result = await query(`
+      UPDATE bonus_risorse 
+      SET 
+        stato = 'approvato',
+        stato_gestione = 'pagato',
+        data_gestione = CURRENT_TIMESTAMP,
+        data_approvazione = CURRENT_TIMESTAMP,
+        gestito_da = $1,
+        manager_id = $1,
+        note_gestione = $2
+      WHERE id = $3
+      RETURNING *
+    `, [req.user.id, note || 'Bonus pagato', id]);
+
+    await query(`
+      INSERT INTO log_redistribuzione_ore (
+        manager_id, tipo_azione, importo_bonus, commento, dettagli_json
+      )
+      VALUES ($1, 'bonus_pagato', $2, $3, $4)
+    `, [
+      req.user.id,
+      bonusCheck.rows[0].importo_bonus,
+      note || 'Bonus approvato e pagato',
+      JSON.stringify({ bonus_id: id, risorsa_id: bonusCheck.rows[0].risorsa_id })
+    ]);
+
+    console.log(`✅ Bonus ${id} approvato e pagato`);
+    res.json({ 
+      message: 'Bonus approvato e pagato',
+      bonus: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Paga bonus error:', error);
+    res.status(500).json({ error: 'Errore nel pagamento del bonus', details: error.message });
+  }
+});
+
+// PUT /api/bonus/:id/converti-ore - Converte penalità in ore (APPROVA + CONVERTI)
+router.put('/:id/converti-ore', authenticateToken, requireManager, param('id').isUUID(), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { note } = req.body;
+
+    const bonusCheck = await query('SELECT * FROM bonus_risorse WHERE id = $1', [id]);
+    if (bonusCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Bonus non trovato' });
+    }
+
+    if (!['pending', 'approvato'].includes(bonusCheck.rows[0].stato)) {
+      return res.status(400).json({ error: 'Penalità già gestita o rifiutata' });
+    }
+
+    if (bonusCheck.rows[0].tipo !== 'negativo') {
+      return res.status(400).json({ error: 'Solo le penalità possono essere convertite in ore' });
+    }
+
+    if (bonusCheck.rows[0].stato === 'approvato' && bonusCheck.rows[0].stato_gestione !== 'non_gestito') {
+      return res.status(400).json({ error: 'Penalità già gestita precedentemente' });
+    }
+
+    const oreInMinuti = Math.abs(bonusCheck.rows[0].differenza_ore);
+    const oreInOre = oreInMinuti / 60;
+    
+    await query(`
+      UPDATE utenti 
+      SET ore_annue_tesoretto = ore_annue_tesoretto + $1
+      WHERE id = $2
+    `, [oreInOre, bonusCheck.rows[0].risorsa_id]);
+
+    const result = await query(`
+      UPDATE bonus_risorse 
+      SET 
+        stato = 'approvato',
+        stato_gestione = 'convertito_ore',
+        data_gestione = CURRENT_TIMESTAMP,
+        data_approvazione = CURRENT_TIMESTAMP,
+        gestito_da = $1,
+        manager_id = $1,
+        note_gestione = $2
+      WHERE id = $3
+      RETURNING *
+    `, [req.user.id, note || `Penalità convertita in ${oreInOre.toFixed(2)}h disponibili`, id]);
+
+    await query(`
+      INSERT INTO log_redistribuzione_ore (
+        manager_id, tipo_azione, ore_spostate, commento, dettagli_json
+      )
+      VALUES ($1, 'conversione_penalita_ore', $2, $3, $4)
+    `, [
+      req.user.id,
+      oreInOre,
+      note || `Penalità approvata e convertita in ${oreInOre.toFixed(2)}h tesoretto`,
+      JSON.stringify({ 
+        bonus_id: id, 
+        risorsa_id: bonusCheck.rows[0].risorsa_id,
+        ore_aggiunte: oreInOre
+      })
+    ]);
+
+    console.log(`✅ Penalità ${id} approvata e convertita in ${oreInOre}h`);
+    res.json({ 
+      message: `Penalità approvata e convertita in ${oreInOre.toFixed(2)}h disponibili`,
+      bonus: result.rows[0],
+      ore_aggiunte: oreInOre
+    });
+
+  } catch (error) {
+    console.error('Converti ore error:', error);
+    res.status(500).json({ error: 'Errore nella conversione in ore', details: error.message });
+  }
+});
+
+// POST /api/bonus/:id/crea-task-recupero - Crea task di recupero (APPROVA + CREA TASK)
+router.post('/:id/crea-task-recupero', authenticateToken, requireManager, param('id').isUUID(), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { taskData } = req.body;
+
+    if (!taskData) {
+      return res.status(400).json({ error: 'Dati task obbligatori' });
+    }
+
+    const { nome, attivita_id, scadenza } = taskData;
+    if (!nome || !attivita_id || !scadenza) {
+      return res.status(400).json({ error: 'Nome, attività e scadenza sono obbligatori' });
+    }
+
+    const bonusCheck = await query('SELECT * FROM bonus_risorse WHERE id = $1', [id]);
+    if (bonusCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Bonus non trovato' });
+    }
+
+    if (!['pending', 'approvato'].includes(bonusCheck.rows[0].stato)) {
+      return res.status(400).json({ error: 'Penalità già gestita o rifiutata' });
+    }
+
+    if (bonusCheck.rows[0].tipo !== 'negativo') {
+      return res.status(400).json({ error: 'Solo le penalità possono generare task di recupero' });
+    }
+
+    if (bonusCheck.rows[0].stato === 'approvato' && bonusCheck.rows[0].stato_gestione !== 'non_gestito') {
+      return res.status(400).json({ error: 'Penalità già gestita precedentemente' });
+    }
+
+    const oreStimate = Math.abs(bonusCheck.rows[0].differenza_ore);
+
+    const taskResult = await query(`
+      INSERT INTO task (
+        nome,
+        descrizione,
+        attivita_id,
+        utente_assegnato,
+        ore_stimate,
+        scadenza,
+        stato,
+        creata_da
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'programmata', $7)
+      RETURNING *
+    `, [
+      nome,
+      taskData.descrizione || `Task di recupero da penalità (${oreStimate/60}h)`,
+      attivita_id,
+      bonusCheck.rows[0].risorsa_id,
+      oreStimate,
+      scadenza,
+      req.user.id
+    ]);
+
+    const newTaskId = taskResult.rows[0].id;
+
+    const bonusResult = await query(`
+      UPDATE bonus_risorse 
+      SET 
+        stato = 'approvato',
+        stato_gestione = 'task_creata',
+        data_gestione = CURRENT_TIMESTAMP,
+        data_approvazione = CURRENT_TIMESTAMP,
+        gestito_da = $1,
+        manager_id = $1,
+        task_recupero_id = $2,
+        note_gestione = $3
+      WHERE id = $4
+      RETURNING *
+    `, [
+      req.user.id, 
+      newTaskId,
+      `Task di recupero creata: ${nome}`,
+      id
+    ]);
+
+    await query(`
+  INSERT INTO log_redistribuzione_ore (
+    manager_id, tipo_azione, ore_spostate, commento, dettagli_json
+  )
+  VALUES ($1, 'creazione_task', $2, $3, $4)
+`, [
+  req.user.id,
+  oreStimate,
+  `Task di recupero approvata e creata per penalità`,
+  JSON.stringify({ 
+    bonus_id: id, 
+    risorsa_id: bonusCheck.rows[0].risorsa_id,
+    task_recupero_id: newTaskId,
+    ore_stimate_minuti: oreStimate
+  })
+]);
+
+    console.log(`✅ Task di recupero ${newTaskId} creata per penalità ${id}`);
+    res.status(201).json({ 
+      message: 'Task di recupero approvata e creata con successo',
+      bonus: bonusResult.rows[0],
+      task: taskResult.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Crea task recupero error:', error);
+    res.status(500).json({ error: 'Errore nella creazione della task di recupero', details: error.message });
+  }
+});
+
+
 
 module.exports = router;
