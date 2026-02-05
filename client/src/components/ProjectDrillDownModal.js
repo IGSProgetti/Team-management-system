@@ -934,6 +934,7 @@ const ProjectDrillDownModal = ({
       <CreateActivityModal
         isOpen={showCreateActivityModal}
         onClose={() => setShowCreateActivityModal(false)}
+        progettoId={progetto?.id}  // 🆕 AGGIUNGI QUESTA RIGA
         areaId={selectedArea?.id}
         areaNome={selectedArea?.nome}
         onSuccess={handleCreateActivitySuccess}

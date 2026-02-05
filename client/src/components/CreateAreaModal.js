@@ -125,10 +125,6 @@ const CreateAreaModal = ({ isOpen, onClose, progettoId, progettoNome, onSuccess 
       newErrors.nome = 'Il nome dell\'area è obbligatorio';
     }
 
-    if (risorseAssegnate.length === 0) {
-      newErrors.risorse_assegnate = 'Devi assegnare almeno una risorsa all\'area';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -292,17 +288,17 @@ const CreateAreaModal = ({ isOpen, onClose, progettoId, progettoNome, onSuccess 
             <h3 className="text-lg font-semibold text-gray-900">Assegna Risorse all'Area *</h3>
 
             {loadingRisorse ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                <span className="ml-2 text-gray-600">Caricamento risorse...</span>
-              </div>
-            ) : risorseDisponibili.length === 0 ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm text-yellow-800">
-                  Nessuna risorsa assegnata a questo progetto. Assegna risorse al progetto prima di creare un'area.
-                </p>
-              </div>
-            ) : (
+  <div className="flex items-center justify-center py-8">
+    <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+    <span className="ml-2 text-gray-600">Caricamento risorse...</span>
+  </div>
+) : risorseDisponibili.length === 0 ? (
+  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <p className="text-sm text-blue-800">
+      ℹ️ Nessuna risorsa assegnata al progetto. Le risorse verranno assegnate automaticamente quando creerai le attività di quest'area.
+    </p>
+  </div>
+) : (
               <>
                 {/* Selezione Risorsa */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -435,7 +431,7 @@ const CreateAreaModal = ({ isOpen, onClose, progettoId, progettoNome, onSuccess 
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || risorseAssegnate.length === 0}
+              disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 
                        transition-colors disabled:opacity-50 flex items-center justify-center"
             >

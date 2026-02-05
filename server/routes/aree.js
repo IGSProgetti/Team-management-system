@@ -6,13 +6,16 @@ const { body, param, validationResult } = require('express-validator');
 const router = express.Router();
 
 // Middleware validazione area
+// 🆕 TUTTI I CAMPI OPZIONALI TRANNE nome e progetto_id
+// Budget e ore possono essere 0 se l'area non ha ancora risorse/attività
 const validateArea = [
   body('nome').trim().notEmpty().withMessage('Nome obbligatorio'),
   body('progetto_id').isUUID().withMessage('Progetto ID deve essere UUID valido'),
-  body('coordinatore_id').optional().isUUID().withMessage('Coordinatore ID deve essere UUID valido'),
-  body('budget_stimato').optional().isDecimal().withMessage('Budget deve essere numero'),
-  body('ore_stimate').optional().isInt({ min: 0 }).withMessage('Ore stimate devono essere >= 0'),
-  body('scadenza').optional().isISO8601().withMessage('Scadenza deve essere data valida'),
+  body('coordinatore_id').optional({ nullable: true, checkFalsy: true }).isUUID().withMessage('Coordinatore ID deve essere UUID valido'),
+  body('budget_stimato').optional({ nullable: true, checkFalsy: true }).isDecimal().withMessage('Budget deve essere numero'),
+  body('ore_stimate').optional({ nullable: true, checkFalsy: true }).isInt({ min: 0 }).withMessage('Ore stimate devono essere >= 0'),
+  body('scadenza').optional({ nullable: true, checkFalsy: true }).isISO8601().withMessage('Scadenza deve essere data valida'),
+  body('risorse_assegnate').optional({ nullable: true, checkFalsy: true }).isArray().withMessage('Risorse assegnate deve essere un array'),
 ];
 
 // GET /api/aree - Lista aree
@@ -251,11 +254,12 @@ router.post('/', authenticateToken, requireManager, validateArea, async (req, re
     }
 
     // ========================================
-    // 3. GESTIONE RISORSE ASSEGNATE (NUOVO!)
+    // 3. GESTIONE RISORSE ASSEGNATE (OPZIONALE!)
     // ========================================
     let budgetTotaleArea = 0;
     let oreStimateCalcolate = 0;
     
+    // 🆕 Le risorse sono OPZIONALI - se non ci sono, budget resta a 0
     if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
       console.log('🔍 Verifica risorse assegnate:', risorse_assegnate);
 
@@ -310,6 +314,9 @@ router.post('/', authenticateToken, requireManager, validateArea, async (req, re
 
       console.log(`💰 Budget totale area calcolato: €${budgetTotaleArea.toFixed(2)}`);
       console.log(`⏱️ Ore stimate calcolate: ${oreStimateCalcolate}h`);
+    } else {
+      // 🆕 NESSUNA RISORSA: OK, budget a 0
+      console.log('ℹ️  Area creata senza risorse. Budget = 0. Verrà popolato quando si creano attività.');
     }
 
     // ========================================
