@@ -468,7 +468,7 @@ router.put('/:id', authenticateToken, requireManager, param('id').isUUID(), vali
   }
 });
 
-// DELETE /api/aree/:id - Soft delete area
+// DELETE /api/aree/:id - Elimina area con cascata completa (pattern identico a cliente)
 router.delete('/:id', authenticateToken, requireManager, param('id').isUUID(), async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -478,20 +478,110 @@ router.delete('/:id', authenticateToken, requireManager, param('id').isUUID(), a
 
     const { id } = req.params;
 
-    // Verifica che l'area esista
-    const areaCheck = await query('SELECT id FROM aree WHERE id = $1 AND attivo = true', [id]);
-    if (areaCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Area non trovata' });
+    // Validazione UUID
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ 
+        error: 'Validation Error', 
+        details: 'Invalid area ID format' 
+      });
     }
 
-    // Soft delete
-    await query('UPDATE aree SET attivo = false, data_aggiornamento = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+    await transaction(async (client) => {
+      // 🔍 Verifica che l'area esista
+      const areaCheck = await client.query(`
+        SELECT id, nome FROM aree WHERE id = $1
+      `, [id]);
 
-    res.json({ message: 'Area eliminata con successo' });
+      if (areaCheck.rows.length === 0) {
+        throw new Error('Area non trovata');
+      }
+
+      const areaNome = areaCheck.rows[0].nome;
+      console.log(`🗑️ Inizio eliminazione area: ${areaNome}`);
+
+      // 📊 Conta cosa verrà eliminato (per log e response)
+      const stats = await client.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM attivita WHERE area_id = $1) as attivita,
+          (SELECT COUNT(*) FROM task t
+           JOIN attivita att ON t.attivita_id = att.id
+           WHERE att.area_id = $1) as task
+      `, [id]);
+
+      const counts = stats.rows[0];
+      console.log(`📊 Verranno eliminati:`, counts);
+
+      // 🗑️ FASE 1: Elimina Riassegnazioni Ore
+      console.log('🗑️ FASE 1: Eliminazione Riassegnazioni Ore...');
+      await client.query(`
+        DELETE FROM riassegnazioni_ore
+        WHERE task_sorgente_id IN (
+          SELECT t.id FROM task t
+          JOIN attivita att ON t.attivita_id = att.id
+          WHERE att.area_id = $1
+        )
+        OR task_destinazione_id IN (
+          SELECT t.id FROM task t
+          JOIN attivita att ON t.attivita_id = att.id
+          WHERE att.area_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 2: Elimina Task
+      console.log('🗑️ FASE 2: Eliminazione Task...');
+      await client.query(`
+        DELETE FROM task 
+        WHERE attivita_id IN (
+          SELECT id FROM attivita WHERE area_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 3: Elimina Assegnazioni Attività
+      console.log('🗑️ FASE 3: Eliminazione Assegnazioni Attività...');
+      await client.query(`
+        DELETE FROM assegnazioni_attivita
+        WHERE attivita_id IN (
+          SELECT id FROM attivita WHERE area_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 4: Elimina Attività
+      console.log('🗑️ FASE 4: Eliminazione Attività...');
+      await client.query(`
+        DELETE FROM attivita WHERE area_id = $1
+      `, [id]);
+
+      // 🗑️ FASE 5: Elimina Assegnazioni Area
+      console.log('🗑️ FASE 5: Eliminazione Assegnazioni Area...');
+      await client.query(`
+        DELETE FROM assegnazioni_area WHERE area_id = $1
+      `, [id]);
+
+      // 🗑️ FASE 6: Elimina Area
+      console.log('🗑️ FASE 6: Eliminazione Area...');
+      await client.query(`
+        DELETE FROM aree WHERE id = $1
+      `, [id]);
+
+      console.log(`✅ Area "${areaNome}" eliminata con successo!`);
+
+      res.json({
+        success: true,
+        message: `Area "${areaNome}" eliminata con successo`,
+        deleted: {
+          area: areaNome,
+          attivita: parseInt(counts.attivita),
+          task: parseInt(counts.task)
+        }
+      });
+    });
 
   } catch (error) {
-    console.error('Delete area error:', error);
-    res.status(500).json({ error: 'Errore nell\'eliminazione dell\'area', details: error.message });
+    console.error('❌ Delete area error:', error);
+    res.status(500).json({ 
+      error: 'Errore nell\'eliminazione dell\'area', 
+      details: error.message 
+    });
   }
 });
 

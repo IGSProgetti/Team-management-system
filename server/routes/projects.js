@@ -890,80 +890,153 @@ router.post('/:id/assign', authenticateToken, requireManager, validateUUID('id')
   }
 });
 
-// ✅ DELETE /api/projects/:id - Elimina progetto (solo manager o creatore)
-router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
+// DELETE /api/projects/:id - Elimina progetto CON CASCATA COMPLETA
+router.delete('/:id', authenticateToken, requireManager, validateUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
 
     await transaction(async (client) => {
-      // Verifica permessi
-      const projectCheck = await client.query(`
-        SELECT p.*, c.budget_utilizzato 
-        FROM progetti p
-        LEFT JOIN clienti c ON p.cliente_id = c.id
-        WHERE p.id = $1
+      // 🔍 Verifica che il progetto esista
+      const progettoCheck = await client.query(`
+        SELECT id, nome, cliente_id, budget_assegnato FROM progetti WHERE id = $1
       `, [id]);
 
-      if (projectCheck.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Not Found',
-          details: 'Project not found'
-        });
+      if (progettoCheck.rows.length === 0) {
+        throw new Error('Progetto non trovato');
       }
 
-      const project = projectCheck.rows[0];
+      const progettoNome = progettoCheck.rows[0].nome;
+      const clienteId = progettoCheck.rows[0].cliente_id;
+      const budgetProgetto = parseFloat(progettoCheck.rows[0].budget_assegnato || 0);
+      
+      console.log(`🗑️ Inizio eliminazione progetto: ${progettoNome}`);
 
-      // Solo manager o creatore può eliminare
-      if (req.user.ruolo !== 'manager' && project.creato_da !== req.user.id) {
-        return res.status(403).json({
-          error: 'Access Denied',
-          details: 'Only project creator or manager can delete'
-        });
-      }
-
-      // Verifica che non ci siano attività associate
-      const activitiesCheck = await client.query(`
-        SELECT COUNT(*) as count FROM attivita WHERE progetto_id = $1
+      // 📊 Conta cosa verrà eliminato
+      const stats = await client.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM aree WHERE progetto_id = $1) as aree,
+          (SELECT COUNT(*) FROM attivita att
+           JOIN aree a ON att.area_id = a.id
+           WHERE a.progetto_id = $1) as attivita,
+          (SELECT COUNT(*) FROM task t
+           JOIN attivita att ON t.attivita_id = att.id
+           JOIN aree a ON att.area_id = a.id
+           WHERE a.progetto_id = $1) as task
       `, [id]);
 
-      if (parseInt(activitiesCheck.rows[0].count) > 0) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          details: 'Cannot delete project with associated activities'
-        });
-      }
+      const counts = stats.rows[0];
+      console.log(`📊 Verranno eliminati:`, counts);
 
-      // Rimuovi assegnazioni
+      // 🗑️ FASE 1: Elimina Riassegnazioni Ore
+      console.log('🗑️ FASE 1: Eliminazione Riassegnazioni Ore...');
+      await client.query(`
+        DELETE FROM riassegnazioni_ore
+        WHERE task_sorgente_id IN (
+          SELECT t.id FROM task t
+          JOIN attivita att ON t.attivita_id = att.id
+          JOIN aree a ON att.area_id = a.id
+          WHERE a.progetto_id = $1
+        )
+        OR task_destinazione_id IN (
+          SELECT t.id FROM task t
+          JOIN attivita att ON t.attivita_id = att.id
+          JOIN aree a ON att.area_id = a.id
+          WHERE a.progetto_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 2: Elimina Task
+      console.log('🗑️ FASE 2: Eliminazione Task...');
+      await client.query(`
+        DELETE FROM task 
+        WHERE attivita_id IN (
+          SELECT att.id FROM attivita att
+          JOIN aree a ON att.area_id = a.id
+          WHERE a.progetto_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 3: Elimina Assegnazioni Attività
+      console.log('🗑️ FASE 3: Eliminazione Assegnazioni Attività...');
+      await client.query(`
+        DELETE FROM assegnazioni_attivita
+        WHERE attivita_id IN (
+          SELECT att.id FROM attivita att
+          JOIN aree a ON att.area_id = a.id
+          WHERE a.progetto_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 4: Elimina Attività
+      console.log('🗑️ FASE 4: Eliminazione Attività...');
+      await client.query(`
+        DELETE FROM attivita
+        WHERE area_id IN (
+          SELECT id FROM aree WHERE progetto_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 5: Elimina Assegnazioni Area
+      console.log('🗑️ FASE 5: Eliminazione Assegnazioni Area...');
+      await client.query(`
+        DELETE FROM assegnazioni_area
+        WHERE area_id IN (
+          SELECT id FROM aree WHERE progetto_id = $1
+        )
+      `, [id]);
+
+      // 🗑️ FASE 6: Elimina Aree
+      console.log('🗑️ FASE 6: Eliminazione Aree...');
+      await client.query(`
+        DELETE FROM aree WHERE progetto_id = $1
+      `, [id]);
+
+      // 🗑️ FASE 7: Elimina Assegnazioni Progetto
+      console.log('🗑️ FASE 7: Eliminazione Assegnazioni Progetto...');
       await client.query(`
         DELETE FROM assegnazioni_progetto WHERE progetto_id = $1
       `, [id]);
 
-      // Se progetto era approvato, restituisci budget al cliente
-      if (project.stato_approvazione === 'approvata') {
-        await client.query(`
-          UPDATE clienti 
-          SET budget_utilizzato = COALESCE(budget_utilizzato, 0) - $1,
-              data_aggiornamento = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `, [project.budget_assegnato, project.cliente_id]);
-      }
+      // 🗑️ FASE 8: Elimina Margini Progetto
+      console.log('🗑️ FASE 8: Eliminazione Margini Progetto...');
+      await client.query(`
+        DELETE FROM margini_progetto WHERE progetto_id = $1
+      `, [id]);
 
-      // Elimina progetto
+      // 🗑️ FASE 9: Elimina Progetto
+      console.log('🗑️ FASE 9: Eliminazione Progetto...');
       await client.query(`
         DELETE FROM progetti WHERE id = $1
       `, [id]);
 
+      // 💰 FASE 10: Aggiorna budget cliente (libera il budget)
+      console.log('💰 FASE 10: Aggiornamento Budget Cliente...');
+      await client.query(`
+        UPDATE clienti
+        SET budget_utilizzato = COALESCE(budget_utilizzato, 0) - $1,
+            data_aggiornamento = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [budgetProgetto, clienteId]);
+
+      console.log(`✅ Progetto "${progettoNome}" eliminato con successo!`);
+
       res.json({
-        message: 'Project deleted successfully',
-        project_id: id
+        success: true,
+        message: `Progetto "${progettoNome}" eliminato con successo`,
+        deleted: {
+          progetto: progettoNome,
+          aree: parseInt(counts.aree),
+          attivita: parseInt(counts.attivita),
+          task: parseInt(counts.task)
+        }
       });
     });
 
   } catch (error) {
-    console.error('Delete project error:', error);
+    console.error('❌ Delete project error:', error);
     res.status(500).json({ 
-      error: 'Server Error', 
-      details: error.message || 'Failed to delete project' 
+      error: 'Errore nell\'eliminazione del progetto', 
+      details: error.message 
     });
   }
 });

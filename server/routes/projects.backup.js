@@ -1,9 +1,13 @@
+
+
 const express = require('express');
 const { query, transaction } = require('../config/database');
 const { authenticateToken, requireManager, requireResource } = require('../middleware/auth');
 const { validateProject, validateProjectAssignment, validateUUID, validatePagination } = require('../middleware/validation');
 
 const router = express.Router();
+console.log('🔥🔥🔥 FILE PROJECTS.JS CARICATO!');
+
 
 // GET /api/projects - Lista progetti
 router.get('/', authenticateToken, validatePagination, async (req, res) => {
@@ -362,13 +366,99 @@ COALESCE(SUM(
   }
 });
 
-// POST /api/projects - Crea nuovo progetto
+// ============================================
+// 🆕 AGGIUNGI QUESTO ENDPOINT A server/routes/projects.js
+// Posizione: Dopo gli altri endpoint GET, prima di POST /api/projects
+// ============================================
+
+// GET /api/project-resources/:progetto_id - Ottiene risorse assegnate a un progetto
+router.get('/project-resources/:progetto_id', authenticateToken, async (req, res) => {
+  try {
+    const { progetto_id } = req.params;
+
+    console.log('📊 Caricamento risorse progetto:', progetto_id);
+
+    // Verifica che il progetto esista
+    const progettoCheck = await query('SELECT id, nome FROM progetti WHERE id = $1', [progetto_id]);
+    if (progettoCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Progetto non trovato' });
+    }
+
+    // Ottieni risorse assegnate al progetto
+    const result = await query(`
+      SELECT 
+        ap.id as assegnazione_id,
+        ap.progetto_id,
+        ap.utente_id as risorsa_id,
+        u.nome as risorsa_nome,
+        u.email as risorsa_email,
+        ap.ore_assegnate,
+        ap.costo_orario_base,
+        ap.costo_orario_finale,
+        ap.budget_risorsa,
+        ap.data_assegnazione,
+        
+        -- Calcola ore già utilizzate in aree
+        COALESCE(
+          (SELECT SUM(aa.ore_assegnate)
+           FROM assegnazioni_area aa
+           JOIN aree a ON aa.area_id = a.id
+           WHERE a.progetto_id = ap.progetto_id 
+           AND aa.utente_id = ap.utente_id
+           AND a.attivo = true), 
+          0
+        ) as ore_utilizzate_aree,
+        
+        -- Calcola ore disponibili
+        ap.ore_assegnate - COALESCE(
+          (SELECT SUM(aa.ore_assegnate)
+           FROM assegnazioni_area aa
+           JOIN aree a ON aa.area_id = a.id
+           WHERE a.progetto_id = ap.progetto_id 
+           AND aa.utente_id = ap.utente_id
+           AND a.attivo = true), 
+          0
+        ) as ore_disponibili
+        
+      FROM assegnazioni_progetto ap
+      JOIN utenti u ON ap.utente_id = u.id
+      WHERE ap.progetto_id = $1
+      ORDER BY u.nome ASC
+    `, [progetto_id]);
+
+    console.log(`✅ Trovate ${result.rows.length} risorse per progetto ${progetto_id}`);
+
+    res.json({ 
+      risorse: result.rows,
+      progetto: progettoCheck.rows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Errore caricamento risorse progetto:', error);
+    res.status(500).json({ 
+      error: 'Errore nel caricamento delle risorse del progetto', 
+      details: error.message 
+    });
+  }
+});
+
+// 🆕 POST /api/projects - Crea nuovo progetto CON ASSEGNAZIONE RISORSE
 router.post('/', authenticateToken, requireResource, validateProject, async (req, res) => {
   try {
-    const { nome, descrizione, cliente_id, budget_assegnato, data_inizio, data_fine } = req.body;
+    const { 
+      nome, 
+      descrizione, 
+      cliente_id, 
+      budget_assegnato, 
+      data_inizio, 
+      data_fine,
+      risorse_assegnate // 🆕 NUOVO: array di oggetti {risorsa_id, ore_assegnate}
+    } = req.body;
+
+    console.log('📝 Creazione progetto:', { nome, cliente_id, risorse_assegnate });
 
     await transaction(async (client) => {
-      // Verifica che il cliente esista ed è approvato
+      // 1. Verifica che il cliente esista ed è approvato
       const clientCheck = await client.query(`
         SELECT id, budget, budget_utilizzato 
         FROM clienti 
@@ -380,48 +470,135 @@ router.post('/', authenticateToken, requireResource, validateProject, async (req
       }
 
       const client_budget = clientCheck.rows[0];
-
-      // Verifica budget disponibile
       const budget_disponibile = parseFloat(client_budget.budget) - parseFloat(client_budget.budget_utilizzato || 0);
-      if (parseFloat(budget_assegnato) > budget_disponibile) {
-        throw new Error('Insufficient client budget available');
+
+      console.log('💰 Budget cliente:', { 
+        totale: client_budget.budget, 
+        utilizzato: client_budget.budget_utilizzato,
+        disponibile: budget_disponibile 
+      });
+
+      // 2. 🆕 CALCOLA BUDGET PROGETTO DALLE RISORSE ASSEGNATE
+      let budget_progetto_calcolato = 0;
+      
+      if (risorse_assegnate && risorse_assegnate.length > 0) {
+        console.log('👥 Calcolo budget da risorse assegnate...');
+        
+        for (const assegnazione of risorse_assegnate) {
+          const { risorsa_id, ore_assegnate } = assegnazione;
+          
+          // Verifica che la risorsa sia assegnata al cliente
+          const risorsaCliente = await client.query(`
+            SELECT 
+              acr.costo_orario_base,
+              acr.costo_orario_finale,
+              acr.ore_assegnate as ore_disponibili_cliente,
+              u.nome as risorsa_nome
+            FROM assegnazione_cliente_risorsa acr
+            JOIN utenti u ON acr.risorsa_id = u.id
+            WHERE acr.cliente_id = $1 AND acr.risorsa_id = $2
+          `, [cliente_id, risorsa_id]);
+
+          if (risorsaCliente.rows.length === 0) {
+            throw new Error(`Resource ${risorsa_id} is not assigned to this client`);
+          }
+
+          const risorsa = risorsaCliente.rows[0];
+          const costo_orario_finale = parseFloat(risorsa.costo_orario_finale);
+          const budget_risorsa = parseFloat(ore_assegnate) * costo_orario_finale;
+
+          budget_progetto_calcolato += budget_risorsa;
+
+          console.log(`  ✓ ${risorsa.risorsa_nome}: ${ore_assegnate}h × €${costo_orario_finale}/h = €${budget_risorsa.toFixed(2)}`);
+        }
+
+        console.log(`💵 Budget progetto calcolato: €${budget_progetto_calcolato.toFixed(2)}`);
+      } else {
+        // Se non ci sono risorse assegnate, usa il budget_assegnato manuale (backward compatibility)
+        budget_progetto_calcolato = parseFloat(budget_assegnato || 0);
+        console.log('⚠️  Nessuna risorsa assegnata, uso budget manuale:', budget_progetto_calcolato);
+      }
+
+      // 3. Verifica budget disponibile
+      if (budget_progetto_calcolato > budget_disponibile) {
+        throw new Error(`Insufficient client budget. Available: €${budget_disponibile.toFixed(2)}, Required: €${budget_progetto_calcolato.toFixed(2)}`);
       }
 
       const statoApprovazione = req.user.ruolo === 'manager' ? 'approvata' : 'pending_approval';
 
-      // Crea progetto
+      // 4. Crea progetto
       const result = await client.query(`
-        INSERT INTO progetti (nome, descrizione, cliente_id, budget_assegnato, stato_approvazione, creato_da, data_inizio, data_fine)
+        INSERT INTO progetti (
+          nome, descrizione, cliente_id, budget_assegnato, 
+          stato_approvazione, creato_da, data_inizio, data_fine
+        )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
-      `, [nome, descrizione, cliente_id, budget_assegnato, statoApprovazione, req.user.id, data_inizio, data_fine]);
+      `, [
+        nome, descrizione, cliente_id, budget_progetto_calcolato, 
+        statoApprovazione, req.user.id, data_inizio, data_fine
+      ]);
 
       const project = result.rows[0];
+      console.log('✅ Progetto creato:', project.id);
 
-      // Se il manager crea direttamente, aggiorna budget cliente
+      // 5. 🆕 INSERISCI ASSEGNAZIONI RISORSE IN assegnazioni_progetto
+      if (risorse_assegnate && risorse_assegnate.length > 0) {
+        console.log('📊 Inserimento assegnazioni risorse...');
+        
+        for (const assegnazione of risorse_assegnate) {
+          const { risorsa_id, ore_assegnate } = assegnazione;
+          
+          // Recupera dati risorsa dal cliente
+          const risorsaCliente = await client.query(`
+            SELECT costo_orario_base, costo_orario_finale
+            FROM assegnazione_cliente_risorsa
+            WHERE cliente_id = $1 AND risorsa_id = $2
+          `, [cliente_id, risorsa_id]);
+
+          const risorsa = risorsaCliente.rows[0];
+          const costo_orario_base = parseFloat(risorsa.costo_orario_base);
+          const costo_orario_finale = parseFloat(risorsa.costo_orario_finale);
+          const budget_risorsa = parseFloat(ore_assegnate) * costo_orario_finale;
+
+          await client.query(`
+            INSERT INTO assegnazioni_progetto (
+              progetto_id, utente_id, ore_assegnate,
+              costo_orario_base, costo_orario_finale, budget_risorsa
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+          `, [project.id, risorsa_id, ore_assegnate, costo_orario_base, costo_orario_finale, budget_risorsa]);
+
+          console.log(`  ✓ Assegnazione risorsa ${risorsa_id}: ${ore_assegnate}h, budget: €${budget_risorsa.toFixed(2)}`);
+        }
+      }
+
+      // 6. Se il manager crea direttamente, aggiorna budget cliente
       if (statoApprovazione === 'approvata') {
         await client.query(`
           UPDATE clienti 
           SET budget_utilizzato = COALESCE(budget_utilizzato, 0) + $1,
               data_aggiornamento = CURRENT_TIMESTAMP
           WHERE id = $2
-        `, [budget_assegnato, cliente_id]);
+        `, [budget_progetto_calcolato, cliente_id]);
+        
+        console.log('💰 Budget cliente aggiornato');
       }
 
       res.status(201).json({
         message: statoApprovazione === 'pending_approval' 
-          ? 'Project created and pending manager approval' 
-          : 'Project created successfully',
+          ? 'Project created successfully and pending manager approval' 
+          : 'Project created and approved successfully',
         project: {
           ...project,
-          cliente_nome: client_budget.nome,
-          pending_approval: statoApprovazione === 'pending_approval'
-        }
+          numero_risorse: risorse_assegnate?.length || 0
+        },
+        stato: statoApprovazione
       });
     });
 
   } catch (error) {
-    console.error('Create project error:', error);
+    console.error('❌ Create project error:', error);
     res.status(500).json({ 
       error: 'Server Error', 
       details: error.message || 'Failed to create project' 
@@ -644,6 +821,8 @@ router.put('/:id', authenticateToken, validateUUID('id'), validateProject, async
     });
   }
 });
+
+
 
 // POST /api/projects/:id/assign - Assegna risorse (solo manager)
 router.post('/:id/assign', authenticateToken, requireManager, validateUUID('id'), async (req, res) => {
