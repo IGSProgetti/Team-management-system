@@ -27,8 +27,8 @@ const Layout = () => {
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Task', href: '/tasks', icon: CheckSquare },
     { name: 'Attività', href: '/activities', icon: Layers },
-    { name: 'Progetti', href: '/projects', icon: FolderOpen },
     { name: 'Aree', href: '/areas', icon: Building2 },
+    { name: 'Progetti', href: '/projects', icon: FolderOpen },
     { name: 'Clienti', href: '/clients', icon: Users },
     { name: 'Calendario', href: '/calendar', icon: Calendar },
   ];
