@@ -70,8 +70,8 @@ const ActivityCard = ({ activity, onClick }) => {
   const percentualeBudget = budgetTotale > 0 ? Math.min(100, (budgetUtilizzato / budgetTotale) * 100) : 0;
 
   // Calcola percentuale ore
-  const oreStimate = parseFloat(activity.ore_stimate || 0);
-  const oreEffettive = parseFloat(activity.ore_effettive || 0);
+  const oreStimate = parseFloat(activity.ore_stimate || 0) / 60;
+  const oreEffettive = parseFloat(activity.ore_effettive || 0) / 60;
   const percentualeOre = oreStimate > 0 ? Math.min(100, (oreEffettive / oreStimate) * 100) : 0;
 
   const getBudgetColor = () => {
@@ -121,8 +121,8 @@ const ActivityCard = ({ activity, onClick }) => {
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs text-gray-600">Ore</span>
             <span className="text-xs font-medium text-gray-900">
-              {(oreEffettive / 60).toFixed(1)}h / {(oreStimate / 60).toFixed(1)}h
-            </span>
+  {oreEffettive.toFixed(1)}h / {oreStimate.toFixed(1)}h
+</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5">
             <div 
@@ -155,6 +155,16 @@ const TaskCard = ({ task }) => {
       case 'completata': return 'bg-green-100 text-green-700 border-green-200';
       case 'in_esecuzione': return 'bg-blue-100 text-blue-700 border-blue-200';
       default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  // 🆕 AGGIUNGI QUESTA FUNZIONE
+  const formatOre = (minuti) => {
+    if (minuti < 60) {
+      return `${Math.round(minuti)}min`;
+    } else {
+      const ore = minuti / 60;
+      return `${ore.toFixed(1)}h`;
     }
   };
 
@@ -206,16 +216,32 @@ const TaskCard = ({ task }) => {
           </div>
         </div>
 
-        <div>
-          <div className="text-xs text-gray-500 mb-1">Ore</div>
-          <div className="flex items-center text-gray-900">
-            <Clock className="w-3 h-3 mr-1" />
-            <span className="text-xs">
-              {task.ore_effettive ? `${(task.ore_effettive / 60).toFixed(1)}h` : 
-               task.ore_stimate ? `~${(task.ore_stimate / 60).toFixed(1)}h` : 'N/D'}
-            </span>
-          </div>
-        </div>
+        {/* Info Ore con barra visiva se task completata */}
+{(task.ore_stimate > 0 || task.ore_effettive > 0) && (
+  <div className="mb-3 pb-3 border-b border-gray-100">
+    <div className="flex justify-between items-center mb-1">
+      <span className="text-xs text-gray-600">Ore</span>
+      <span className="text-xs font-medium text-gray-900">
+        {task.stato === 'completata' && task.ore_effettive > 0 
+          ? `${formatOre(task.ore_effettive)} / ${formatOre(task.ore_stimate)}`
+          : `${formatOre(task.ore_stimate)} stimate`
+        }
+      </span>
+    </div>
+    {task.stato === 'completata' && task.ore_effettive > 0 && (
+      <div className="w-full bg-gray-200 rounded-full h-1.5">
+        <div 
+          className={`h-1.5 rounded-full transition-all duration-300 ${
+            task.ore_effettive > task.ore_stimate ? 'bg-red-500' : 
+            task.ore_effettive > task.ore_stimate * 0.8 ? 'bg-orange-500' : 
+            'bg-green-500'
+          }`}
+          style={{ width: `${Math.min(100, (task.ore_effettive / task.ore_stimate) * 100)}%` }}
+        />
+      </div>
+    )}
+  </div>
+)}
       </div>
     </div>
   );

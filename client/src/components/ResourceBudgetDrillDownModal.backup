@@ -6,6 +6,8 @@ import {
   TrendingDown, AlertCircle, Layers, Gift, Minus
 } from 'lucide-react';
 import api from '../utils/api';
+import ConvertiOreModal from './ConvertiOreModal';
+
 
 const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
   const [loading, setLoading] = useState(true);
@@ -18,6 +20,8 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
   // State per modal creazione task
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [taskDataForModal, setTaskDataForModal] = useState(null);
+  const [convertiOreModalOpen, setConvertiOreModalOpen] = useState(false);
+  const [bonusSelezionato, setBonusSelezionato] = useState(null);
 
   useEffect(() => {
     fetchDrillDown();
@@ -173,6 +177,8 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
                   fetchDrillDown={fetchDrillDown}
                   setTaskDataForModal={setTaskDataForModal}
                   setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
                 />
               ))}
             </div>
@@ -204,6 +210,18 @@ const ResourceBudgetDrillDownModal = ({ risorsa, onClose }) => {
           }}
         />
       )}
+
+      {/* Modale Converti Ore */}
+      <ConvertiOreModal
+        isOpen={convertiOreModalOpen}
+        onClose={() => setConvertiOreModalOpen(false)}
+        bonus={bonusSelezionato}
+        onSuccess={(data) => {
+          alert(`✅ ${data.message}\nOre aggiunte: ${data.ore_aggiunte.toFixed(2)}h\nCliente: ${data.cliente_id}`);
+          setConvertiOreModalOpen(false);
+          fetchDrillDown();
+        }}
+      />
     </div>
   );
 };
@@ -237,7 +255,9 @@ const ClienteSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali ore preventivate e effettive
@@ -312,6 +332,8 @@ const ClienteSection = ({
                   fetchDrillDown={fetchDrillDown}
                   setTaskDataForModal={setTaskDataForModal}
                   setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
                 />
               ))}
             </div>
@@ -337,7 +359,9 @@ const ProgettoSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali
@@ -409,6 +433,8 @@ const ProgettoSection = ({
                     fetchDrillDown={fetchDrillDown}
                     setTaskDataForModal={setTaskDataForModal}
                     setShowCreateTaskModal={setShowCreateTaskModal}
+                    setBonusSelezionato={setBonusSelezionato}
+                    setConvertiOreModalOpen={setConvertiOreModalOpen}
                   />
                 ))
               )}
@@ -433,7 +459,9 @@ const AreaSection = ({
   getDiffColor,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali
@@ -498,6 +526,8 @@ const AreaSection = ({
                     fetchDrillDown={fetchDrillDown}
                     setTaskDataForModal={setTaskDataForModal}
                     setShowCreateTaskModal={setShowCreateTaskModal}
+                    setBonusSelezionato={setBonusSelezionato}
+                    setConvertiOreModalOpen={setConvertiOreModalOpen}
                   />
                 ))
               )}
@@ -520,7 +550,9 @@ const AttivitaSection = ({
   formatCurrency,
   fetchDrillDown,
   setTaskDataForModal,
-  setShowCreateTaskModal
+  setShowCreateTaskModal,
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
   
   // Calcola totali dalle task
@@ -574,15 +606,17 @@ const AttivitaSection = ({
                 <p className="text-xs text-gray-500 italic ml-2">Nessuna task in questa attività</p>
               ) : (
                 <TaskTableView
-  tasks={attivita.tasks}
-  attivitaId={attivita.id}
-  formatHours={formatHours}
-  formatCurrency={formatCurrency}
-  getStatusColor={getStatusColor}
-  fetchDrillDown={fetchDrillDown}
-  setTaskDataForModal={setTaskDataForModal}
-  setShowCreateTaskModal={setShowCreateTaskModal}
-/>
+                  tasks={attivita.tasks}
+                  attivitaId={attivita.id}
+                  formatHours={formatHours}
+                  formatCurrency={formatCurrency}
+                  getStatusColor={getStatusColor}
+                  fetchDrillDown={fetchDrillDown}
+                  setTaskDataForModal={setTaskDataForModal}
+                  setShowCreateTaskModal={setShowCreateTaskModal}
+                  setBonusSelezionato={setBonusSelezionato}
+                  setConvertiOreModalOpen={setConvertiOreModalOpen}
+                />
               )}
             </div>
           </motion.div>
@@ -601,22 +635,28 @@ const TaskTableView = ({
   getStatusColor, 
   fetchDrillDown, 
   setTaskDataForModal, 
-  setShowCreateTaskModal 
+  setShowCreateTaskModal, 
+  setBonusSelezionato,
+  setConvertiOreModalOpen
 }) => {
-  // Calcola totali
-  const totaleBonus = tasks.reduce((sum, task) => {
-    if (task.bonus && task.bonus.stato === 'pending') {
-      return sum + parseFloat(task.bonus.importo_bonus || 0);
-    }
-    return sum;
-  }, 0);
+  // Calcola totali - SOLO bonus NON ancora gestiti (guarda solo stato_gestione)
+const totaleBonus = tasks.reduce((sum, task) => {
+  if (task.bonus && 
+      (!task.bonus.stato_gestione || task.bonus.stato_gestione === 'non_gestito')) {
+    return sum + parseFloat(task.bonus.importo_bonus || 0);
+  }
+  return sum;
+}, 0);
 
-  const totaleBonusApprovato = tasks.reduce((sum, task) => {
-    if (task.bonus && task.bonus.stato === 'approvato') {
-      return sum + parseFloat(task.bonus.importo_bonus || 0);
-    }
-    return sum;
-  }, 0);
+// Totale già gestiti (pagati, convertiti, task creata)
+const totaleBonusGestito = tasks.reduce((sum, task) => {
+  if (task.bonus && 
+      task.bonus.stato_gestione && 
+      task.bonus.stato_gestione !== 'non_gestito') {
+    return sum + parseFloat(task.bonus.importo_bonus || 0);
+  }
+  return sum;
+}, 0);
 
   return (
     <div className="overflow-x-auto">
@@ -707,15 +747,11 @@ const TaskTableView = ({
                       {task.bonus.tipo === 'negativo' && (
                         <>
                           <button
-                            onClick={async () => {
-                              if (!window.confirm('Confermi di voler convertire questa penalità in ore disponibili? (Verrà automaticamente approvata)')) return;
-                              try {
-                                const res = await api.put(`/bonus/${task.bonus.id}/converti-ore`, { note: 'Convertito in ore' });
-                                alert(`✅ Penalità approvata! Aggiunte ${res.data.ore_aggiunte.toFixed(2)}h al tesoretto!`);
-                                fetchDrillDown();
-                              } catch (err) {
-                                alert(err.response?.data?.error || 'Errore nella conversione');
-                              }
+                            onClick={() => {
+                              console.log('🔘 Click su Converti Ore!'); // ← AGGIUNGI QUESTO
+                              console.log('📦 Bonus selezionato:', task.bonus); // ← AGGIUNGI QUESTO
+                              setBonusSelezionato(task.bonus);
+                              setConvertiOreModalOpen(true);
                             }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition"
                           >
@@ -723,22 +759,22 @@ const TaskTableView = ({
                           </button>
                           
                           <button
-  onClick={() => {
-    setTaskDataForModal({
-      nome: `Recupero - ${task.nome}`,
-      descrizione: `Task di recupero da penalità di ${Math.abs(task.bonus.differenza_ore / 60).toFixed(2)}h`,
-      attivita_id: attivitaId,  // ← CORRETTO: usa l'ID dell'attività dal componente padre
-      utente_assegnato: task.bonus.risorsa_id,
-      ore_stimate: Math.abs(task.bonus.differenza_ore),
-      scadenza: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
-      bonus_id: task.bonus.id
-    });
-    setShowCreateTaskModal(true);
-  }}
-  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition"
->
-  ✓ Crea Task
-</button>
+                            onClick={() => {
+                              setTaskDataForModal({
+                                nome: `Recupero - ${task.nome}`,
+                                descrizione: `Task di recupero da penalità di ${Math.abs(task.bonus.differenza_ore / 60).toFixed(2)}h`,
+                                attivita_id: attivitaId,
+                                utente_assegnato: task.bonus.risorsa_id,
+                                ore_stimate: Math.abs(task.bonus.differenza_ore),
+                                scadenza: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                                bonus_id: task.bonus.id
+                              });
+                              setShowCreateTaskModal(true);
+                            }}
+                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition"
+                          >
+                            ✓ Crea Task
+                          </button>
                         </>
                       )}
                     </div>
@@ -792,42 +828,168 @@ const TaskTableView = ({
             </td>
             <td className="px-2 py-3 border-t"></td>
           </tr>
-          {totaleBonusApprovato !== 0 && (
-            <tr>
-              <td colSpan="9" className="px-2 py-2 border-t text-right text-sm">
-                Totale Bonus Approvato:
-              </td>
-              <td className={`px-2 py-2 border-t text-right ${
-                totaleBonusApprovato > 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {formatCurrency(totaleBonusApprovato)}
-              </td>
-              <td className="px-2 py-2 border-t"></td>
-            </tr>
-          )}
+          {totaleBonusGestito !== 0 && (
+  <tr>
+    <td colSpan="9" className="px-2 py-2 border-t text-right text-sm">
+      Totale Bonus Gestito:
+    </td>
+    <td className={`px-2 py-2 border-t text-right ${
+      totaleBonusGestito > 0 ? 'text-green-600' : 'text-red-600'
+    }`}>
+      {formatCurrency(totaleBonusGestito)}
+    </td>
+    <td className="px-2 py-2 border-t"></td>
+  </tr>
+)}
         </tfoot>
       </table>
     </div>
   );
 };
 
-// Modal Creazione Task Recupero
+// Modal Creazione Task Recupero - VERSIONE COMPLETA CON SELETTORI
 const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
+  // Stati form
   const [formData, setFormData] = useState({
     nome: taskData?.nome || '',
     descrizione: taskData?.descrizione || '',
-    scadenza: taskData?.scadenza || ''
+    scadenza: taskData?.scadenza || '',
+    cliente_id: '',
+    progetto_id: '',
+    area_id: '',
+    attivita_id: taskData?.attivita_id || ''
   });
+
+  // Stati per dropdown
+  const [clienti, setClienti] = useState([]);
+  const [progetti, setProgetti] = useState([]);
+  const [aree, setAree] = useState([]);
+  const [attivita, setAttivita] = useState([]);
+
+  // Stati UI
+  const [loading, setLoading] = useState(false);
+  const [loadingDropdown, setLoadingDropdown] = useState({
+    clienti: false,
+    progetti: false,
+    aree: false,
+    attivita: false
+  });
+  const [errors, setErrors] = useState({});
+
+  // Carica clienti all'apertura
+  useEffect(() => {
+    if (isOpen) {
+      fetchClienti();
+    }
+  }, [isOpen]);
+
+  // Fetch Clienti
+  const fetchClienti = async () => {
+    try {
+      setLoadingDropdown(prev => ({ ...prev, clienti: true }));
+      const response = await api.get('/clients');
+      setClienti(response.data.clients || []);
+    } catch (error) {
+      console.error('Errore caricamento clienti:', error);
+      setErrors(prev => ({ ...prev, clienti: 'Errore caricamento clienti' }));
+    } finally {
+      setLoadingDropdown(prev => ({ ...prev, clienti: false }));
+    }
+  };
+
+  // Fetch Progetti quando cambia cliente
+  useEffect(() => {
+    if (formData.cliente_id) {
+      fetchProgetti(formData.cliente_id);
+      setFormData(prev => ({ ...prev, progetto_id: '', area_id: '', attivita_id: '' }));
+      setProgetti([]);
+      setAree([]);
+      setAttivita([]);
+    } else {
+      setProgetti([]);
+      setAree([]);
+      setAttivita([]);
+    }
+  }, [formData.cliente_id]);
+
+  const fetchProgetti = async (clienteId) => {
+    try {
+      setLoadingDropdown(prev => ({ ...prev, progetti: true }));
+      const response = await api.get(`/projects?cliente_id=${clienteId}`);
+      setProgetti(response.data.projects || []);
+    } catch (error) {
+      console.error('Errore caricamento progetti:', error);
+      setErrors(prev => ({ ...prev, progetti: 'Errore caricamento progetti' }));
+    } finally {
+      setLoadingDropdown(prev => ({ ...prev, progetti: false }));
+    }
+  };
+
+  // Fetch Aree quando cambia progetto
+  useEffect(() => {
+    if (formData.progetto_id) {
+      fetchAree(formData.progetto_id);
+      setFormData(prev => ({ ...prev, area_id: '', attivita_id: '' }));
+      setAree([]);
+      setAttivita([]);
+    } else {
+      setAree([]);
+      setAttivita([]);
+    }
+  }, [formData.progetto_id]);
+
+  const fetchAree = async (progettoId) => {
+    try {
+      setLoadingDropdown(prev => ({ ...prev, aree: true }));
+      const response = await api.get(`/aree?progetto_id=${progettoId}`);
+      setAree(response.data.aree || []);
+    } catch (error) {
+      console.error('Errore caricamento aree:', error);
+      setErrors(prev => ({ ...prev, aree: 'Errore caricamento aree' }));
+    } finally {
+      setLoadingDropdown(prev => ({ ...prev, aree: false }));
+    }
+  };
+
+  // Fetch Attività quando cambia area
+  useEffect(() => {
+    if (formData.area_id) {
+      fetchAttivita(formData.area_id);
+      setFormData(prev => ({ ...prev, attivita_id: '' }));
+      setAttivita([]);
+    } else {
+      setAttivita([]);
+    }
+  }, [formData.area_id]);
+
+  const fetchAttivita = async (areaId) => {
+    try {
+      setLoadingDropdown(prev => ({ ...prev, attivita: true }));
+      const response = await api.get(`/activities?area_id=${areaId}`);
+      setAttivita(response.data.activities || []);
+    } catch (error) {
+      console.error('Errore caricamento attività:', error);
+      setErrors(prev => ({ ...prev, attivita: 'Errore caricamento attività' }));
+    } finally {
+      setLoadingDropdown(prev => ({ ...prev, attivita: false }));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!formData.attivita_id) {
+      setErrors({ attivita: 'Devi selezionare un\'attività' });
+      return;
+    }
+    
     try {
+      setLoading(true);
       await api.post(`/bonus/${taskData.bonus_id}/crea-task-recupero`, {
         taskData: {
           nome: formData.nome,
           descrizione: formData.descrizione,
-          attivita_id: taskData.attivita_id,
+          attivita_id: formData.attivita_id,
           scadenza: formData.scadenza
         }
       });
@@ -836,7 +998,10 @@ const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (err) {
-      alert(err.response?.data?.error || 'Errore nella creazione');
+      console.error('Errore creazione task:', err);
+      setErrors({ submit: err.response?.data?.error || 'Errore nella creazione' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -844,8 +1009,8 @@ const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="bg-orange-600 text-white p-4 rounded-t-lg flex items-center justify-between">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-orange-600 text-white p-4 rounded-t-lg flex items-center justify-between sticky top-0">
           <div>
             <h3 className="text-lg font-bold">Crea Task di Recupero</h3>
             <p className="text-sm text-orange-100 mt-1">
@@ -858,6 +1023,14 @@ const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          
+          {errors.submit && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <span className="text-sm text-red-800">{errors.submit}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nome Task *
@@ -870,6 +1043,83 @@ const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               placeholder="es: Recupero ore progetto X"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cliente *
+            </label>
+            <select
+              value={formData.cliente_id}
+              onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
+              required
+              disabled={loadingDropdown.clienti}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100"
+            >
+              <option value="">Seleziona cliente...</option>
+              {clienti.map(cliente => (
+                <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
+              ))}
+            </select>
+            {loadingDropdown.clienti && <p className="text-xs text-gray-500 mt-1">Caricamento...</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Progetto *
+            </label>
+            <select
+              value={formData.progetto_id}
+              onChange={(e) => setFormData({ ...formData, progetto_id: e.target.value })}
+              required
+              disabled={!formData.cliente_id || loadingDropdown.progetti}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100"
+            >
+              <option value="">{!formData.cliente_id ? 'Seleziona prima un cliente' : 'Seleziona progetto...'}</option>
+              {progetti.map(progetto => (
+                <option key={progetto.id} value={progetto.id}>{progetto.nome}</option>
+              ))}
+            </select>
+            {loadingDropdown.progetti && <p className="text-xs text-gray-500 mt-1">Caricamento...</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Area *
+            </label>
+            <select
+              value={formData.area_id}
+              onChange={(e) => setFormData({ ...formData, area_id: e.target.value })}
+              required
+              disabled={!formData.progetto_id || loadingDropdown.aree}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100"
+            >
+              <option value="">{!formData.progetto_id ? 'Seleziona prima un progetto' : 'Seleziona area...'}</option>
+              {aree.map(area => (
+                <option key={area.id} value={area.id}>{area.nome}</option>
+              ))}
+            </select>
+            {loadingDropdown.aree && <p className="text-xs text-gray-500 mt-1">Caricamento...</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Attività *
+            </label>
+            <select
+              value={formData.attivita_id}
+              onChange={(e) => setFormData({ ...formData, attivita_id: e.target.value })}
+              required
+              disabled={!formData.area_id || loadingDropdown.attivita}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100"
+            >
+              <option value="">{!formData.area_id ? 'Seleziona prima un\'area' : 'Seleziona attività...'}</option>
+              {attivita.map(att => (
+                <option key={att.id} value={att.id}>{att.nome}</option>
+              ))}
+            </select>
+            {loadingDropdown.attivita && <p className="text-xs text-gray-500 mt-1">Caricamento...</p>}
+            {errors.attivita && <p className="text-xs text-red-600 mt-1">{errors.attivita}</p>}
           </div>
 
           <div>
@@ -899,29 +1149,40 @@ const CreateTaskRecuperoModal = ({ isOpen, onClose, taskData, onSuccess }) => {
             />
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
-            <p className="text-gray-600">
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1 text-sm">
+            <p className="text-gray-700">
               <span className="font-medium">Ore stimate:</span> {(taskData.ore_stimate / 60).toFixed(2)}h (dalla penalità)
             </p>
-            <p className="text-gray-600">
+            <p className="text-gray-700">
               <span className="font-medium">Assegnata a:</span> Stessa risorsa (automatico)
             </p>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 sticky bottom-0 bg-white pb-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              disabled={loading}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
             >
               Annulla
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center justify-center gap-2"
+              disabled={loading || !formData.attivita_id}
+              className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckSquare className="w-4 h-4" />
-              Crea Task
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Creazione...
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="w-4 h-4" />
+                  Crea Task
+                </>
+              )}
             </button>
           </div>
         </form>

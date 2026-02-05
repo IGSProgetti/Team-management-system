@@ -52,6 +52,13 @@ const ProjectCard = ({ project, onClick }) => {
     ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
     : 0;
   
+  // ✅ CORRETTO: Converti minuti in ore dividendo per 60
+  const oreStimate = parseFloat(project.ore_totali_assegnate || 0) / 60;
+  const oreEffettive = parseFloat(project.ore_totali_utilizzate || 0) / 60;
+  const percentualeOre = oreStimate > 0 
+    ? Math.min(100, (oreEffettive / oreStimate) * 100) 
+    : 0;
+  
   // Determina colore budget
   const getBudgetColor = () => {
     if (budgetEffettivo > budgetPreventivato) return 'bg-red-500'; // Sforato
@@ -100,13 +107,13 @@ const ProjectCard = ({ project, onClick }) => {
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs text-gray-600">Ore</span>
             <span className="text-xs font-medium text-gray-900">
-              {(project.ore_totali_utilizzate / 60).toFixed(0)}h
+              {oreEffettive.toFixed(1)}h / {oreStimate.toFixed(1)}h
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5">
             <div 
               className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
-              style={{ width: `${Math.min(100, (project.ore_totali_utilizzate / (project.ore_totali_assegnate || 1)) * 100)}%` }}
+              style={{ width: `${percentualeOre}%` }}
             />
           </div>
         </div>
@@ -129,12 +136,17 @@ const ProjectCard = ({ project, onClick }) => {
 // COMPONENTE: Card Area
 // ============================================
 const AreaCard = ({ area, onClick }) => {
-  // Calcola percentuali
-  const budgetPreventivato = parseFloat(area.budget_assegnato || 0);  // ✅ CAMBIATO
-  const budgetEffettivo = parseFloat(area.budget_utilizzato || 0);    // ✅ CAMBIATO
+  // Calcola percentuali budget
+  const budgetPreventivato = parseFloat(area.budget_assegnato || 0);
+  const budgetEffettivo = parseFloat(area.budget_effettivo || 0); // ✅ CORRETTO: budget_effettivo invece di budget_utilizzato
   const percentualeBudget = budgetPreventivato > 0 
     ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
     : 0;
+  
+  // ✅ AGGIUNGI: Calcola percentuale ore
+  const oreStimate = parseFloat(area.ore_stimate || 0) / 60; // Converti minuti in ore
+  const oreEffettive = parseFloat(area.ore_effettive_calcolate || 0) / 60; // Converti minuti in ore
+  const percentualeOre = oreStimate > 0 ? Math.min(100, (oreEffettive / oreStimate) * 100) : 0;
 
   const percentualeCompletamento = parseFloat(area.percentuale_completamento || 0);
 
@@ -180,24 +192,21 @@ const AreaCard = ({ area, onClick }) => {
           </div>
         </div>
 
-        {/* Progress Bar Task */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Completamento</span>
-            <span className="text-xs font-medium text-gray-900">
-              {percentualeCompletamento.toFixed(0)}%
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                percentualeCompletamento === 100 ? 'bg-green-500' : 
-                percentualeCompletamento > 50 ? 'bg-blue-500' : 'bg-blue-400'
-              }`}
-              style={{ width: `${percentualeCompletamento}%` }}
-            />
-          </div>
-        </div>
+        {/* Progress Bar Ore */}
+<div>
+  <div className="flex justify-between items-center mb-1">
+    <span className="text-xs text-gray-600">Ore</span>
+    <span className="text-xs font-medium text-gray-900">
+      {oreEffettive.toFixed(1)}h / {oreStimate.toFixed(1)}h
+    </span>
+  </div>
+  <div className="w-full bg-gray-200 rounded-full h-1.5">
+    <div 
+      className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
+      style={{ width: `${percentualeOre}%` }}
+    />
+  </div>
+</div>
       </div>
       
       <div className="flex items-center justify-between text-sm">
@@ -219,10 +228,15 @@ const AreaCard = ({ area, onClick }) => {
 const ActivityCard = ({ activity, onClick }) => {
   // Calcola percentuali
   const budgetPreventivato = parseFloat(activity.budget_assegnato || 0);  // ✅ CAMBIATO
-  const budgetEffettivo = parseFloat(activity.budget_utilizzato || 0);    // ✅ CAMBIATO
+  const budgetEffettivo = parseFloat(activity.budget_effettivo || 0);    // ✅ CORRETTO
   const percentualeBudget = budgetPreventivato > 0 
     ? Math.min(100, (budgetEffettivo / budgetPreventivato) * 100) 
     : 0;
+    
+    // ✅ AGGIUNGI: Calcola percentuale ore
+  const oreStimate = parseFloat(activity.ore_stimate || 0) / 60; // Converti minuti in ore
+  const oreEffettive = parseFloat(activity.ore_effettive || 0) / 60; // Converti minuti in ore
+  const percentualeOre = oreStimate > 0 ? Math.min(100, (oreEffettive / oreStimate) * 100) : 0;
 
   const totaleTask = parseInt(activity.totale_task || activity.numero_task || 0);
   const taskCompletate = parseInt(activity.task_completate || 0);
@@ -270,24 +284,21 @@ const ActivityCard = ({ activity, onClick }) => {
           </div>
         </div>
 
-        {/* Progress Bar Task */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">Task</span>
-            <span className="text-xs font-medium text-gray-900">
-              {taskCompletate}/{totaleTask}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                percentualeTask === 100 ? 'bg-green-500' : 
-                percentualeTask > 50 ? 'bg-blue-500' : 'bg-blue-400'
-              }`}
-              style={{ width: `${percentualeTask}%` }}
-            />
-          </div>
-        </div>
+        {/* Progress Bar Ore */}
+<div>
+  <div className="flex justify-between items-center mb-1">
+    <span className="text-xs text-gray-600">Ore</span>
+    <span className="text-xs font-medium text-gray-900">
+      {oreEffettive.toFixed(1)}h / {oreStimate.toFixed(1)}h
+    </span>
+  </div>
+  <div className="w-full bg-gray-200 rounded-full h-1.5">
+    <div 
+      className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
+      style={{ width: `${percentualeOre}%` }}
+    />
+  </div>
+</div>
       </div>
       
       <div className="flex items-center justify-between text-sm">

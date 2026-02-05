@@ -44,8 +44,8 @@ const ProjectCard = ({ project, onClick, onDelete }) => {
   };
 
   // Calcola percentuali
-  const budgetTotale = parseFloat(project.budget_assegnato || 0);
-  const budgetUtilizzato = parseFloat(project.budget_utilizzato || 0);
+const budgetTotale = parseFloat(project.budget_assegnato || 0);
+const budgetUtilizzato = parseFloat(project.budget_effettivo || 0); // ✅ CORRETTO: budget_effettivo invece di budget_utilizzato
   const percentualeBudget = budgetTotale > 0 
     ? Math.min(100, (budgetUtilizzato / budgetTotale) * 100) 
     : 0;

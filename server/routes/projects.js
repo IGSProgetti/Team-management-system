@@ -61,10 +61,16 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
         u.nome as creato_da_nome,
         
         -- Conteggio aree (tutte, non filtrate)
-        COUNT(DISTINCT ar.id) as numero_aree,
-        
-        -- Conteggio risorse assegnate
-        COUNT(DISTINCT ap.utente_id) as numero_risorse,
+COUNT(DISTINCT ar.id) as numero_aree,
+
+-- 🆕 Conteggio attività (tutte, non filtrate)
+COUNT(DISTINCT att.id) as numero_attivita,
+
+-- 🆕 Conteggio task (tutte, non filtrate)
+COUNT(DISTINCT t.id) as numero_task,
+
+-- Conteggio risorse assegnate
+COUNT(DISTINCT ap.utente_id) as numero_risorse,
         
         -- 💰 BUDGET EFFETTIVO - Filtrato per risorsa se presente
         COALESCE(ROUND(SUM(

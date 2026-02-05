@@ -80,20 +80,20 @@ const ProjectCard = ({ project, onClick }) => {
       </div>
 
       {/* Barra Ore */}
-      <div className="mb-3">
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-xs text-gray-600">Ore</span>
-          <span className="text-xs font-medium text-gray-900">
-            {oreUtilizzate.toFixed(0)}h
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-1.5">
-          <div 
-            className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
-            style={{ width: `${Math.min(100, percentualeOre)}%` }}
-          />
-        </div>
-      </div>
+<div className="mb-3">
+  <div className="flex justify-between items-center mb-1">
+    <span className="text-xs text-gray-600">Ore</span>
+    <span className="text-xs font-medium text-gray-900">
+      {oreUtilizzate.toFixed(0)}h / {oreAssegnate.toFixed(0)}h
+    </span>
+  </div>
+  <div className="w-full bg-gray-200 rounded-full h-1.5">
+    <div 
+      className="h-1.5 rounded-full transition-all duration-300 bg-blue-500"
+      style={{ width: `${Math.min(100, percentualeOre)}%` }}
+    />
+  </div>
+</div>
 
       {/* Footer */}
       <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-100">

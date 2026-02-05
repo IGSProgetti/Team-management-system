@@ -79,13 +79,13 @@ const AreaCard = ({ area, onClick, onResourceClick }) => {
   };
 
   // Calcola percentuali budget
-  const budgetTotale = parseFloat(area.budget_assegnato || 0);
-  const budgetUtilizzato = parseFloat(area.budget_utilizzato || 0);
+const budgetTotale = parseFloat(area.budget_assegnato || 0);
+const budgetUtilizzato = parseFloat(area.budget_effettivo || 0); // ✅ CORRETTO: budget_effettivo invece di budget_utilizzato
   const percentualeBudget = budgetTotale > 0 ? Math.min(100, (budgetUtilizzato / budgetTotale) * 100) : 0;
 
-  // Calcola percentuale ore
-  const oreStimate = parseFloat(area.ore_stimate || 0);
-  const oreEffettive = parseFloat(area.ore_effettive_calcolate || 0);
+  // Calcola percentuale ore - CONVERTI DA MINUTI A ORE
+const oreStimate = parseFloat(area.ore_stimate || 0) / 60; // ✅ Converti minuti in ore
+const oreEffettive = parseFloat(area.ore_effettive_calcolate || 0) / 60; // ✅ Converti minuti in ore
   const percentualeOre = oreStimate > 0 ? Math.min(100, (oreEffettive / oreStimate) * 100) : 0;
 
   const getBudgetColor = () => {
@@ -135,8 +135,8 @@ const AreaCard = ({ area, onClick, onResourceClick }) => {
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs text-gray-600">Ore</span>
             <span className="text-xs font-medium text-gray-900">
-              {oreEffettive.toFixed(0)}h
-            </span>
+  {oreEffettive.toFixed(1)}h / {oreStimate.toFixed(1)}h
+</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5">
             <div 
@@ -205,13 +205,13 @@ const ActivityCard = ({ activity, onClick, onResourceClick }) => {
   };
 
   // Calcola percentuali budget
-  const budgetTotale = parseFloat(activity.budget_assegnato || 0);
-  const budgetUtilizzato = parseFloat(activity.budget_utilizzato || 0);
+const budgetTotale = parseFloat(activity.budget_assegnato || 0);
+const budgetUtilizzato = parseFloat(activity.budget_effettivo || 0); // ✅ CORRETTO: budget_effettivo invece di budget_utilizzato
   const percentualeBudget = budgetTotale > 0 ? Math.min(100, (budgetUtilizzato / budgetTotale) * 100) : 0;
 
-  // Calcola percentuale ore
-  const oreStimate = parseFloat(activity.ore_stimate || 0);
-  const oreEffettive = parseFloat(activity.ore_effettive || 0);
+  // Calcola percentuale ore - CONVERTI DA MINUTI A ORE
+const oreStimate = parseFloat(activity.ore_stimate || 0) / 60; // ✅ Converti minuti in ore
+const oreEffettive = parseFloat(activity.ore_effettive || 0) / 60; // ✅ Converti minuti in ore
   const percentualeOre = oreStimate > 0 ? Math.min(100, (oreEffettive / oreStimate) * 100) : 0;
 
   const getBudgetColor = () => {
@@ -338,6 +338,17 @@ const TaskCard = ({ task, onResourceClick }) => {
     }
   };
 
+  // 🆕 AGGIUNGI QUESTA FUNZIONE
+  const formatOre = (minuti) => {
+    if (minuti < 60) {
+      return `${Math.round(minuti)}min`;
+    } else {
+      const ore = minuti / 60;
+      return `${ore.toFixed(1)}h`;
+    }
+  };
+
+  // 🔄 MODIFICA: tieni i valori in MINUTI (non dividere per 60)
   const oreStimate = parseFloat(task.ore_stimate || 0);
   const oreEffettive = parseFloat(task.ore_effettive || 0);
 
@@ -361,11 +372,11 @@ const TaskCard = ({ task, onResourceClick }) => {
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs text-gray-600">Ore</span>
             <span className="text-xs font-medium text-gray-900">
-              {task.stato === 'completata' && oreEffettive > 0 
-                ? `${oreEffettive.toFixed(1)}h / ${oreStimate.toFixed(1)}h`
-                : `${oreStimate.toFixed(1)}h stimate`
-              }
-            </span>
+  {task.stato === 'completata' && oreEffettive > 0 
+    ? `${formatOre(oreEffettive)} / ${formatOre(oreStimate)}`
+    : `${formatOre(oreStimate)} stimate`
+  }
+</span>
           </div>
           {task.stato === 'completata' && oreEffettive > 0 && (
             <div className="w-full bg-gray-200 rounded-full h-1.5">
