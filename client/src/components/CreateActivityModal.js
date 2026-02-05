@@ -18,7 +18,7 @@ const CreateActivityModal = ({
     scadenza: ''
   });
   
-  // 🆕 STATO PER RISORSE
+  // STATO PER RISORSE
   const [risorseDisponibili, setRisorseDisponibili] = useState([]);
   const [risorseAssegnate, setRisorseAssegnate] = useState([]);
   const [risorsaSelezionata, setRisorsaSelezionata] = useState('');
@@ -31,7 +31,7 @@ const CreateActivityModal = ({
   // Carica risorse quando si apre il modal
   useEffect(() => {
     if (isOpen && areaId) {
-      loadRisorseArea();
+      loadRisorseCliente();
       // Reset form
       setFormData({
         nome: '',
@@ -46,15 +46,26 @@ const CreateActivityModal = ({
     }
   }, [isOpen, areaId]);
 
-  const loadRisorseArea = async () => {
+  // 🔄 CARICA RISORSE DAL CLIENTE (non dall'area vuota!)
+  const loadRisorseCliente = async () => {
     try {
       setLoadingRisorse(true);
-      const response = await api.get(`/activities/area-resources/${areaId}`);
-      console.log('📊 Risorse area caricate:', response.data.risorse);
-      setRisorseDisponibili(response.data.risorse || []);
+      
+      // Prima ottieni l'area per risalire al cliente
+      const areaResponse = await api.get(`/aree/${areaId}`);
+      const area = areaResponse.data.area;
+      
+      console.log('📊 Area:', area);
+      
+      // Ora carica le risorse del cliente
+      const risorseResponse = await api.get(`/client-resources/${area.cliente_id}`);
+      
+      console.log('📊 Risorse cliente caricate:', risorseResponse.data.risorse);
+      setRisorseDisponibili(risorseResponse.data.risorse || []);
+      
     } catch (error) {
-      console.error('Errore caricamento risorse area:', error);
-      setErrors({ risorse: 'Impossibile caricare le risorse dell\'area' });
+      console.error('Errore caricamento risorse:', error);
+      setErrors({ risorse: 'Impossibile caricare le risorse' });
     } finally {
       setLoadingRisorse(false);
     }
@@ -85,15 +96,7 @@ const CreateActivityModal = ({
     const ore = parseFloat(oreRisorsa);
     const oreDisponibili = parseFloat(risorsa.ore_disponibili || 0);
     
-    // Verifica ore disponibili
-    if (ore > oreDisponibili) {
-      setErrors({ 
-        ...errors, 
-        ore: `${risorsa.risorsa_nome} ha solo ${oreDisponibili}h disponibili nell'area` 
-      });
-      return;
-    }
-
+    // Nota: Non verifichiamo ore disponibili perché l'auto-assegnazione le creerà
     const costoOrarioFinale = parseFloat(risorsa.costo_orario_finale || 0);
     const budgetRisorsa = ore * costoOrarioFinale;
 
@@ -105,8 +108,7 @@ const CreateActivityModal = ({
         risorsa_nome: risorsa.risorsa_nome,
         ore_assegnate: ore,
         costo_orario_finale: costoOrarioFinale,
-        budget_risorsa: budgetRisorsa,
-        ore_disponibili: oreDisponibili
+        budget_risorsa: budgetRisorsa
       }
     ]);
 
@@ -155,9 +157,8 @@ const CreateActivityModal = ({
         descrizione: formData.descrizione.trim() || null,
         progetto_id: progettoId,
         area_id: areaId,
-        ore_stimate: oreTotaliAssegnate,  // Usa ore totali assegnate
+        ore_stimate: oreTotaliAssegnate,
         scadenza: formData.scadenza || null,
-        // 🆕 AGGIUNGI RISORSE ASSEGNATE
         risorse_assegnate: risorseAssegnate.map(r => ({
           risorsa_id: r.risorsa_id,
           ore_assegnate: r.ore_assegnate
@@ -176,7 +177,7 @@ const CreateActivityModal = ({
       onClose();
     } catch (error) {
       console.error('❌ Errore creazione attività:', error);
-      console.error('📋 Dettagli errore completo:', error.response?.data); // ← AGGIUNGI
+      console.error('📋 Dettagli errore completo:', error.response?.data);
       setErrors({
         submit: error.response?.data?.details || 
                 error.response?.data?.error || 
@@ -238,7 +239,8 @@ const CreateActivityModal = ({
                     className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
                       errors.nome ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="Es. Implementazione Login"
+                    placeholder="Es. Sviluppo homepage"
+                    disabled={isSubmitting}
                   />
                 </div>
                 {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
@@ -254,42 +256,45 @@ const CreateActivityModal = ({
                   <textarea
                     value={formData.descrizione}
                     onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
-                    rows={3}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Descrizione dell'attività..."
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[80px]"
+                    placeholder="Descrizione dettagliata dell'attività"
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
 
               {/* Scadenza */}
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Calendar className="w-4 h-4 inline mr-1" />
                   Scadenza
                 </label>
-                <input
-                  type="datetime-local"
-                  value={formData.scadenza}
-                  onChange={(e) => setFormData({ ...formData, scadenza: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="datetime-local"
+                    value={formData.scadenza}
+                    onChange={(e) => setFormData({ ...formData, scadenza: e.target.value })}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Assegnazione Risorse */}
           <div className="space-y-4 border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900">Assegna Risorse all'Attività *</h3>
-            
+            <h3 className="text-lg font-semibold text-gray-900">Assegnazione Risorse</h3>
+
             {loadingRisorse ? (
               <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                <span className="ml-2 text-gray-600">Caricamento risorse...</span>
+                <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="text-gray-500">Caricamento risorse...</span>
               </div>
             ) : risorseDisponibili.length === 0 ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  Nessuna risorsa assegnata a questa area. Assegna risorse all'area prima di creare un'attività.
+                  Nessuna risorsa disponibile per questo cliente.
                 </p>
               </div>
             ) : (
@@ -306,13 +311,14 @@ const CreateActivityModal = ({
                       className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
                         errors.risorsa ? 'border-red-500' : 'border-gray-300'
                       }`}
+                      disabled={isSubmitting}
                     >
                       <option value="">-- Seleziona risorsa --</option>
                       {risorseDisponibili
                         .filter(r => !risorseAssegnate.find(ra => ra.risorsa_id === r.risorsa_id))
                         .map(risorsa => (
                           <option key={risorsa.risorsa_id} value={risorsa.risorsa_id}>
-                            {risorsa.risorsa_nome} ({parseFloat(risorsa.ore_disponibili || 0).toFixed(1)}h disponibili)
+                            {risorsa.risorsa_nome}
                           </option>
                         ))}
                     </select>
@@ -321,18 +327,19 @@ const CreateActivityModal = ({
 
                   <div className="md:col-span-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ore da Assegnare
+                      Ore da Assegnare *
                     </label>
                     <input
                       type="number"
                       step="0.5"
-                      min="0"
+                      min="0.5"
                       value={oreRisorsa}
                       onChange={(e) => setOreRisorsa(e.target.value)}
                       placeholder="Es. 10.5"
                       className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
                         errors.ore ? 'border-red-500' : 'border-gray-300'
                       }`}
+                      disabled={isSubmitting}
                     />
                     {errors.ore && <p className="mt-1 text-sm text-red-600">{errors.ore}</p>}
                   </div>
@@ -341,10 +348,10 @@ const CreateActivityModal = ({
                     <button
                       type="button"
                       onClick={handleAggiungiRisorsa}
-                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                               transition-colors flex items-center justify-center"
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 flex items-center justify-center"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
+                      <Plus className="w-4 h-4 mr-1" />
                       Aggiungi
                     </button>
                   </div>
@@ -352,50 +359,36 @@ const CreateActivityModal = ({
 
                 {/* Lista Risorse Assegnate */}
                 {risorseAssegnate.length > 0 && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Risorse Assegnate ({risorseAssegnate.length})
-                    </label>
-                    <div className="space-y-2">
-                      {risorseAssegnate.map(risorsa => (
-                        <div
-                          key={risorsa.risorsa_id}
-                          className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
-                        >
+                  <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-700">Risorse Assegnate ({risorseAssegnate.length})</h4>
+                    </div>
+                    <div className="divide-y divide-gray-200">
+                      {risorseAssegnate.map((risorsa) => (
+                        <div key={risorsa.risorsa_id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
                           <div className="flex-1">
-                            <p className="font-medium text-gray-900">{risorsa.risorsa_nome}</p>
-                            <p className="text-sm text-gray-600">
-                              {risorsa.ore_assegnate}h × €{risorsa.costo_orario_finale.toFixed(2)}/h = 
-                              <span className="font-semibold text-green-600 ml-1">
-                                €{risorsa.budget_risorsa.toFixed(2)}
-                              </span>
+                            <p className="text-sm font-medium text-gray-900">{risorsa.risorsa_nome}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {risorsa.ore_assegnate}h × €{risorsa.costo_orario_finale.toFixed(2)}/h = €{risorsa.budget_risorsa.toFixed(2)}
                             </p>
                           </div>
                           <button
                             type="button"
                             onClick={() => handleRimuoviRisorsa(risorsa.risorsa_id)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                            disabled={isSubmitting}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
                     </div>
-
-                    {/* Budget Totale */}
-                    <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-300 rounded-lg">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <span className="text-sm text-gray-600">Ore Totali:</span>
-                          <span className="ml-2 text-lg font-bold text-gray-900">
-                            {oreTotaliAssegnate.toFixed(1)}h
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-sm text-gray-600">Budget Totale:</span>
-                          <span className="ml-2 text-lg font-bold text-green-600">
-                            €{budgetTotaleAttivita.toFixed(2)}
-                          </span>
+                    <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-semibold text-gray-700">Totale</span>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-gray-900">{oreTotaliAssegnate}h</p>
+                          <p className="text-xs text-gray-600">€{budgetTotaleAttivita.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
@@ -409,27 +402,25 @@ const CreateActivityModal = ({
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+          {/* Pulsanti */}
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg 
-                       hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Annulla
             </button>
             <button
               type="submit"
               disabled={isSubmitting || risorseAssegnate.length === 0}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                       transition-colors disabled:opacity-50 flex items-center justify-center"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
             >
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Creando...
+                  Creazione...
                 </>
               ) : (
                 <>

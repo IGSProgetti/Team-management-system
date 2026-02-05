@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /api/activities - Lista attività
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { progetto_id, area_id, stato, risorsa_id } = req.query; // <-- AGGIUNGI area_id
+    const { progetto_id, area_id, stato, risorsa_id } = req.query;
     let whereClause = 'WHERE 1=1';
     let params = [];
 
@@ -26,118 +26,104 @@ router.get('/', authenticateToken, async (req, res) => {
       params.push(progetto_id);
     }
 
-    // 🆕 AGGIUNGI QUESTO BLOCCO
-if (area_id) {
-  whereClause += ' AND a.area_id = $' + (params.length + 1);
-  params.push(area_id);
-}
+    if (area_id) {
+      whereClause += ' AND a.area_id = $' + (params.length + 1);
+      params.push(area_id);
+    }
 
-if (stato) {
-  whereClause += ' AND a.stato = $' + (params.length + 1);
-  params.push(stato);
-}
+    if (stato) {
+      whereClause += ' AND a.stato = $' + (params.length + 1);
+      params.push(stato);
+    }
 
-// 🆕 FILTRO RISORSA: Mostra solo attività dove la risorsa ha almeno 1 task
-/*
-if (risorsa_id) {
-  whereClause += ` AND EXISTS (
-    SELECT 1 FROM task t2
-    WHERE t2.attivita_id = a.id 
-    AND t2.utente_assegnato = $${params.length + 1}
-  )`;
-  params.push(risorsa_id);
-}
-*/
+    const result = await query(`
+      SELECT 
+        a.id, 
+        a.nome, 
+        a.descrizione, 
+        a.ore_stimate, 
+        a.scadenza, 
+        a.stato,
+        a.budget_assegnato,       
+        a.budget_utilizzato,
+        a.data_creazione, 
+        a.data_aggiornamento,
+        
+        -- Progetto e cliente info
+        p.nome as progetto_nome, 
+        p.id as progetto_id,
+        c.nome as cliente_nome,
+        c.id as cliente_id,
+        
+        -- Conteggio risorse assegnate
+        COUNT(DISTINCT aa.utente_id) as numero_risorse,
+        
+        -- Ore (in minuti)
+        COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
+        
+        -- Budget preventivato attività
+        COALESCE(ROUND(SUM(
+          CASE 
+            WHEN ${risorsa_id ? `t.utente_assegnato = $${params.length}` : '1=1'}
+            THEN (t.ore_stimate / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
+            ELSE 0 
+          END
+        ), 2), 0) as budget_preventivato,
 
-    // ✅ QUERY CORRETTA CON CONTEGGIO RISORSE
-const result = await query(`
-  SELECT 
-    a.id, 
-    a.nome, 
-    a.descrizione, 
-    a.ore_stimate, 
-    a.scadenza, 
-    a.stato,
-    a.budget_assegnato,       
-    a.budget_utilizzato,
-    a.data_creazione, 
-    a.data_aggiornamento,
-    
-    -- Progetto e cliente info
-    p.nome as progetto_nome, 
-    p.id as progetto_id,
-    c.nome as cliente_nome,
-    c.id as cliente_id,
-    
-    -- Conteggio risorse assegnate
-    COUNT(DISTINCT aa.utente_id) as numero_risorse,
-    
-    -- Ore (in minuti)
-    COALESCE(SUM(t.ore_effettive), 0) as ore_effettive,
-    
-    -- 💰 BUDGET PREVENTIVATO ATTIVITÀ - Filtrato per risorsa se risorsa_id è presente
-COALESCE(ROUND(SUM(
-  CASE 
-    WHEN ${risorsa_id ? `t.utente_assegnato = $${params.length}` : '1=1'}
-    THEN (t.ore_stimate / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
-    ELSE 0 
-  END
-), 2), 0) as budget_preventivato,
-
--- 💰 BUDGET EFFETTIVO ATTIVITÀ - Filtrato per risorsa se risorsa_id è presente
-COALESCE(ROUND(SUM(
-  CASE 
-    WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
-      ${risorsa_id ? `AND t.utente_assegnato = $${params.length}` : ''}
-    THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
-    ELSE 0 
-  END
-), 2), 0) as budget_effettivo,
-    
-    -- Task statistiche
-    COALESCE(COUNT(DISTINCT t.id), 0) as totale_task,
-    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END), 0) as task_completate,
-    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'in_esecuzione' THEN t.id END), 0) as task_in_corso,
-    COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'programmata' THEN t.id END), 0) as task_programmate,
-    
-    -- Percentuale completamento SAFE
-    CASE 
-      WHEN COUNT(DISTINCT t.id) > 0 THEN 
-        ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
-      ELSE 0
-    END as percentuale_completamento,
-    
-    -- Scostamento ore SAFE
-    CASE 
-      WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
-        ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
-      ELSE 0
-    END as scostamento_percentuale,
-    
-    -- In ritardo SAFE
-    CASE 
-      WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
-      ELSE false 
-    END as in_ritardo
-    
-  FROM attivita a
-  JOIN progetti p ON a.progetto_id = p.id
-  JOIN clienti c ON p.cliente_id = c.id
-  LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id
-  LEFT JOIN task t ON a.id = t.attivita_id
-  LEFT JOIN utenti u ON t.utente_assegnato = u.id
-  LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
-  ${whereClause}
-  GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato, a.budget_assegnato, 
-           a.budget_utilizzato,
-           a.data_creazione, a.data_aggiornamento,
-           p.nome, p.id, c.nome, c.id
-  ORDER BY 
-    CASE WHEN a.stato = 'in_esecuzione' THEN 1 
-         WHEN a.stato = 'programmata' THEN 2 
-         ELSE 3 END,
-    a.scadenza ASC
-`, params);
+        -- Budget effettivo attività
+        COALESCE(ROUND(SUM(
+          CASE 
+            WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL
+              ${risorsa_id ? `AND t.utente_assegnato = $${params.length}` : ''}
+            THEN (t.ore_effettive / 60.0) * COALESCE(acr.costo_orario_finale, u.costo_orario, 0)
+            ELSE 0 
+          END
+        ), 2), 0) as budget_effettivo,
+        
+        -- Task statistiche
+        COALESCE(COUNT(DISTINCT t.id), 0) as totale_task,
+        COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END), 0) as task_completate,
+        COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'in_esecuzione' THEN t.id END), 0) as task_in_corso,
+        COALESCE(COUNT(DISTINCT CASE WHEN t.stato = 'programmata' THEN t.id END), 0) as task_programmate,
+        
+        -- Percentuale completamento
+        CASE 
+          WHEN COUNT(DISTINCT t.id) > 0 THEN 
+            ROUND((COUNT(DISTINCT CASE WHEN t.stato = 'completata' THEN t.id END)::decimal / COUNT(DISTINCT t.id)) * 100, 0)
+          ELSE 0
+        END as percentuale_completamento,
+        
+        -- Scostamento ore
+        CASE 
+          WHEN a.ore_stimate > 0 AND SUM(t.ore_effettive) IS NOT NULL THEN 
+            ROUND(((SUM(t.ore_effettive) - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
+          ELSE 0
+        END as scostamento_percentuale,
+        
+        -- In ritardo
+        CASE 
+          WHEN a.scadenza < CURRENT_TIMESTAMP AND a.stato != 'completata' THEN true 
+          ELSE false 
+        END as in_ritardo
+        
+      FROM attivita a
+      JOIN progetti p ON a.progetto_id = p.id
+      JOIN clienti c ON p.cliente_id = c.id
+      LEFT JOIN assegnazioni_attivita aa ON a.id = aa.attivita_id
+      LEFT JOIN task t ON a.id = t.attivita_id
+      LEFT JOIN utenti u ON t.utente_assegnato = u.id
+      LEFT JOIN assegnazione_cliente_risorsa acr ON (acr.cliente_id = c.id AND acr.risorsa_id = t.utente_assegnato)
+      ${whereClause}
+      GROUP BY a.id, a.nome, a.descrizione, a.ore_stimate, a.scadenza, a.stato, a.budget_assegnato, 
+               a.budget_utilizzato,
+               a.data_creazione, a.data_aggiornamento,
+               p.nome, p.id, c.nome, c.id
+      ORDER BY 
+        CASE WHEN a.stato = 'in_esecuzione' THEN 1 
+             WHEN a.stato = 'programmata' THEN 2 
+             ELSE 3 END,
+        a.scadenza ASC
+    `, params);
 
     res.json({ 
       activities: result.rows,
@@ -160,7 +146,7 @@ COALESCE(ROUND(SUM(
   }
 });
 
-// POST /api/activities - Crea nuova attività CON ASSEGNAZIONE RISORSE
+// POST /api/activities - Crea nuova attività CON ASSEGNAZIONE RISORSE E AUTO-ASSEGNAZIONE
 router.post('/', authenticateToken, requireResource, async (req, res) => {
   try {
     const { 
@@ -170,7 +156,7 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
       area_id,
       ore_stimate, 
       scadenza,
-      risorse_assegnate  // 🆕 NUOVO: array di {risorsa_id, ore_assegnate}
+      risorse_assegnate
     } = req.body;
 
     console.log('📝 Creazione attività:', { nome, area_id, risorse_assegnate });
@@ -189,23 +175,126 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
       }
 
       // ========================================
-      // 2. GESTIONE RISORSE ASSEGNATE (NUOVO!)
+      // 2. GESTIONE RISORSE ASSEGNATE CON AUTO-ASSEGNAZIONE
       // ========================================
       let budgetTotaleAttivita = 0;
       let oreStimateCalcolate = 0;
       
+      console.log('🔍 STEP 2: Gestione risorse assegnate');
+      console.log('📊 risorse_assegnate ricevute:', risorse_assegnate);
+      console.log('📊 tipo:', typeof risorse_assegnate, 'è array?', Array.isArray(risorse_assegnate));
+      
       if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
-        console.log('🔍 Verifica risorse assegnate:', risorse_assegnate);
+        console.log('✅ Risorse trovate, numero:', risorse_assegnate.length);
 
-        // Per ogni risorsa, verifica che sia assegnata all'area
-        for (const ris of risorse_assegnate) {
-          const { risorsa_id, ore_assegnate } = ris;
+        // Ottieni cliente_id dal progetto dell'area
+        console.log('🔍 Recupero cliente_id per area:', area_id);
+        const clienteCheck = await client.query(`
+          SELECT p.cliente_id, p.id as progetto_id
+          FROM aree a
+          JOIN progetti p ON a.progetto_id = p.id
+          WHERE a.id = $1
+        `, [area_id]);
 
-          // Controlla che la risorsa sia nell'area
-          const risorsaArea = await client.query(`
+        console.log('📊 clienteCheck result:', clienteCheck.rows);
+
+        if (clienteCheck.rows.length === 0) {
+          throw new Error('Area o progetto non trovati');
+        }
+
+        const { cliente_id, progetto_id } = clienteCheck.rows[0];
+        console.log(`✅ Cliente: ${cliente_id}, Progetto: ${progetto_id}`);
+
+        // Per ogni risorsa
+        for (let i = 0; i < risorse_assegnate.length; i++) {
+          const ris = risorse_assegnate[i];
+          console.log(`\n🔄 Risorsa ${i + 1}/${risorse_assegnate.length}:`, ris, `tipo: ${typeof ris}`);
+
+          // GESTIONE COMPATIBILITÀ FORMATI
+          let risorsa_id, ore_assegnate;
+
+          if (typeof ris === 'string') {
+            console.log('⚠️ FORMATO DEPRECATO: stringa');
+            risorsa_id = ris;
+            ore_assegnate = 0;
+          } else if (typeof ris === 'object' && ris.risorsa_id) {
+            console.log('✅ FORMATO CORRETTO: oggetto');
+            risorsa_id = ris.risorsa_id;
+            ore_assegnate = parseFloat(ris.ore_assegnate) || 0;
+          } else {
+            console.error('❌ Formato non riconosciuto:', ris);
+            throw new Error('Formato dati risorsa non valido');
+          }
+
+          console.log(`   Estratto: risorsa_id=${risorsa_id}, ore=${ore_assegnate}`);
+
+          // STEP 1: Verifica assegnazione al CLIENTE
+          console.log(`\n   STEP 1: Verifica cliente ${cliente_id}`);
+          const risorsaCliente = await client.query(`
             SELECT 
-              aa.utente_id,
+              acr.risorsa_id,
+              acr.costo_orario_base,
+              acr.costo_orario_finale,
+              u.nome as risorsa_nome
+            FROM assegnazione_cliente_risorsa acr
+            JOIN utenti u ON acr.risorsa_id = u.id
+            WHERE acr.cliente_id = $1 AND acr.risorsa_id = $2
+          `, [cliente_id, risorsa_id]);
+
+          console.log(`   Result:`, risorsaCliente.rows);
+
+          if (risorsaCliente.rows.length === 0) {
+            console.error(`   ❌ Risorsa ${risorsa_id} NON trovata per cliente ${cliente_id}`);
+            throw new Error(`Risorsa non assegnata al cliente`);
+          }
+
+          const risorsaData = risorsaCliente.rows[0];
+          console.log(`   ✅ ${risorsaData.risorsa_nome} assegnata al cliente`);
+
+          // STEP 2: Verifica/Crea assegnazione PROGETTO
+          console.log(`\n   STEP 2: Verifica progetto ${progetto_id}`);
+          let assegnazioneProgetto = await client.query(`
+            SELECT id, ore_assegnate, costo_orario_base, costo_orario_finale
+            FROM assegnazioni_progetto
+            WHERE progetto_id = $1 AND utente_id = $2
+          `, [progetto_id, risorsa_id]);
+
+          console.log(`   Result:`, assegnazioneProgetto.rows);
+
+          if (assegnazioneProgetto.rows.length === 0) {
+            console.log(`   🔄 Auto-assegnazione progetto...`);
+            
+            const budgetRisorsaProgetto = ore_assegnate * risorsaData.costo_orario_finale;
+            
+            const nuovaAssegnazioneProgetto = await client.query(`
+              INSERT INTO assegnazioni_progetto (
+                progetto_id, utente_id, ore_assegnate,
+                costo_orario_base, costo_orario_finale, budget_risorsa
+              )
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING *
+            `, [
+              progetto_id, 
+              risorsa_id, 
+              ore_assegnate, 
+              risorsaData.costo_orario_base, 
+              risorsaData.costo_orario_finale,
+              budgetRisorsaProgetto
+            ]);
+
+            assegnazioneProgetto.rows[0] = nuovaAssegnazioneProgetto.rows[0];
+            console.log(`   ✓ Creata: ${ore_assegnate}h`);
+          } else {
+            console.log(`   ✓ Già assegnata`);
+          }
+
+          // STEP 3: Verifica/Crea assegnazione AREA
+          console.log(`\n   STEP 3: Verifica area ${area_id}`);
+          let assegnazioneArea = await client.query(`
+            SELECT 
+              aa.id,
               aa.ore_assegnate as ore_area,
+              aa.costo_orario_base,
               aa.costo_orario_finale,
               COALESCE(
                 (SELECT SUM(aat.ore_assegnate)
@@ -215,35 +304,67 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
                  AND aat.utente_id = aa.utente_id
                  AND att.attivo = true), 
                 0
-              ) as ore_gia_utilizzate,
-              u.nome as risorsa_nome
+              ) as ore_gia_utilizzate
             FROM assegnazioni_area aa
-            JOIN utenti u ON aa.utente_id = u.id
             WHERE aa.area_id = $1 AND aa.utente_id = $2
           `, [area_id, risorsa_id]);
 
-          if (risorsaArea.rows.length === 0) {
-            throw new Error('Risorsa non assegnata a questa area');
+          console.log(`   Result:`, assegnazioneArea.rows);
+
+          if (assegnazioneArea.rows.length === 0) {
+            console.log(`   🔄 Auto-assegnazione area...`);
+            
+            const budgetRisorsaArea = ore_assegnate * risorsaData.costo_orario_finale;
+            
+            const nuovaAssegnazioneArea = await client.query(`
+              INSERT INTO assegnazioni_area (
+                area_id, utente_id, ore_assegnate,
+                costo_orario_base, costo_orario_finale, budget_risorsa
+              )
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING *
+            `, [
+              area_id, 
+              risorsa_id, 
+              ore_assegnate, 
+              risorsaData.costo_orario_base, 
+              risorsaData.costo_orario_finale,
+              budgetRisorsaArea
+            ]);
+
+            assegnazioneArea.rows[0] = {
+              ...nuovaAssegnazioneArea.rows[0],
+              ore_gia_utilizzate: 0
+            };
+            console.log(`   ✓ Creata: ${ore_assegnate}h`);
+          } else {
+            console.log(`   ✓ Già assegnata`);
           }
 
-          const risorsa = risorsaArea.rows[0];
-          const oreDisponibili = risorsa.ore_area - risorsa.ore_gia_utilizzate;
+          // STEP 4: Verifica ore disponibili
+          const areaData = assegnazioneArea.rows[0];
+          const oreDisponibili = areaData.ore_area - areaData.ore_gia_utilizzate;
 
-          // Controlla che non sfori le ore disponibili
+          console.log(`\n   STEP 4: Ore disponibili`);
+          console.log(`   Area: ${areaData.ore_area}h, Usate: ${areaData.ore_gia_utilizzate}h, Disponibili: ${oreDisponibili}h`);
+
           if (ore_assegnate > oreDisponibili) {
             throw new Error(
-              `${risorsa.risorsa_nome} ha solo ${oreDisponibili}h disponibili, richieste ${ore_assegnate}h`
+              `${risorsaData.risorsa_nome} ha solo ${oreDisponibili}h disponibili, richieste ${ore_assegnate}h`
             );
           }
 
-          // Calcola budget
-          const budgetRisorsa = ore_assegnate * risorsa.costo_orario_finale;
+          // STEP 5: Calcola budget
+          const budgetRisorsa = ore_assegnate * risorsaData.costo_orario_finale;
           budgetTotaleAttivita += budgetRisorsa;
           oreStimateCalcolate += ore_assegnate;
+
+          console.log(`\n   💰 ${risorsaData.risorsa_nome}: ${ore_assegnate}h × €${risorsaData.costo_orario_finale}/h = €${budgetRisorsa.toFixed(2)}`);
         }
 
-        console.log(`💰 Budget totale attività calcolato: €${budgetTotaleAttivita.toFixed(2)}`);
-        console.log(`⏱️ Ore stimate calcolate: ${oreStimateCalcolate}h`);
+        console.log(`\n💰 TOTALE: €${budgetTotaleAttivita.toFixed(2)}, Ore: ${oreStimateCalcolate}h`);
+      } else {
+        console.log('⚠️ Nessuna risorsa assegnata');
       }
 
       // ========================================
@@ -277,23 +398,36 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
       console.log('✅ Attività creata:', attivita.id);
 
       // ========================================
-      // 4. CREA ASSEGNAZIONI RISORSE (NUOVO!)
+      // 4. CREA ASSEGNAZIONI RISORSE
       // ========================================
       if (risorse_assegnate && Array.isArray(risorse_assegnate) && risorse_assegnate.length > 0) {
         for (const ris of risorse_assegnate) {
-          const { risorsa_id, ore_assegnate } = ris;
+          
+          let risorsa_id, ore_assegnate;
 
-          // Ottieni costi dalla assegnazioni_area
+          if (typeof ris === 'string') {
+            risorsa_id = ris;
+            ore_assegnate = 0;
+          } else if (typeof ris === 'object' && ris.risorsa_id) {
+            risorsa_id = ris.risorsa_id;
+            ore_assegnate = parseFloat(ris.ore_assegnate) || 0;
+          } else {
+            throw new Error('Formato dati risorsa non valido');
+          }
+
           const costiRisorsa = await client.query(`
             SELECT costo_orario_base, costo_orario_finale
             FROM assegnazioni_area
             WHERE area_id = $1 AND utente_id = $2
           `, [area_id, risorsa_id]);
 
+          if (costiRisorsa.rows.length === 0) {
+            throw new Error(`Impossibile trovare i costi per la risorsa ${risorsa_id}`);
+          }
+
           const costi = costiRisorsa.rows[0];
           const budgetRisorsa = ore_assegnate * costi.costo_orario_finale;
 
-          // Inserisci assegnazione
           await client.query(`
             INSERT INTO assegnazioni_attivita (
               attivita_id,
@@ -312,7 +446,7 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
             budgetRisorsa
           ]);
 
-          console.log(`✅ Risorsa ${risorsa_id} assegnata: ${ore_assegnate}h, €${budgetRisorsa.toFixed(2)}`);
+          console.log(`✅ Assegnazione: ${risorsa_id}, ${ore_assegnate}h, €${budgetRisorsa.toFixed(2)}`);
         }
       }
 
@@ -338,14 +472,13 @@ router.post('/', authenticateToken, requireResource, async (req, res) => {
   }
 });
 
-// GET /api/activities/area-resources/:area_id - Ottiene risorse assegnate a un'area
+// GET /api/activities/area-resources/:area_id - Risorse area
 router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
   try {
     const { area_id } = req.params;
 
     console.log('📊 Caricamento risorse area:', area_id);
 
-    // Verifica che l'area esista
     const areaCheck = await query('SELECT id, nome, progetto_id FROM aree WHERE id = $1', [area_id]);
     if (areaCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Area non trovata' });
@@ -353,7 +486,6 @@ router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
 
     const area = areaCheck.rows[0];
 
-    // Ottieni risorse assegnate all'area
     const result = await query(`
       SELECT 
         aa.id as assegnazione_id,
@@ -367,7 +499,6 @@ router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
         aa.budget_risorsa,
         aa.data_assegnazione,
         
-        -- Calcola ore già utilizzate in attività
         COALESCE(
           (SELECT SUM(aat.ore_assegnate)
            FROM assegnazioni_attivita aat
@@ -378,7 +509,6 @@ router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
           0
         ) as ore_utilizzate_attivita,
         
-        -- Calcola ore disponibili
         aa.ore_assegnate - COALESCE(
           (SELECT SUM(aat.ore_assegnate)
            FROM assegnazioni_attivita aat
@@ -395,7 +525,7 @@ router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
       ORDER BY u.nome ASC
     `, [area_id]);
 
-    console.log(`✅ Trovate ${result.rows.length} risorse per area ${area_id}`);
+    console.log(`✅ Trovate ${result.rows.length} risorse`);
 
     res.json({ 
       risorse: result.rows,
@@ -407,9 +537,9 @@ router.get('/area-resources/:area_id', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Errore caricamento risorse area:', error);
+    console.error('❌ Errore caricamento risorse:', error);
     res.status(500).json({ 
-      error: 'Errore nel caricamento delle risorse dell\'area', 
+      error: 'Errore nel caricamento delle risorse', 
       details: error.message 
     });
   }
@@ -420,7 +550,6 @@ router.get('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verifica permessi
     let accessCheck = '';
     let accessParams = [id];
     
@@ -435,13 +564,11 @@ router.get('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
         a.scadenza, a.stato, a.data_creazione, a.data_aggiornamento,
         p.nome as progetto_nome, p.id as progetto_id,
         c.nome as cliente_nome, c.id as cliente_id,
-        -- Performance calcoli
         CASE 
           WHEN a.ore_effettive > 0 THEN 
             ROUND(((a.ore_effettive - a.ore_stimate)::decimal / a.ore_stimate) * 100, 1)
           ELSE NULL 
         END as scostamento_percentuale,
-        -- Progresso completamento
         ROUND(
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
@@ -465,16 +592,13 @@ router.get('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
 
     const activity = result.rows[0];
 
-    // Ottieni risorse assegnate
     const resourcesResult = await query(`
       SELECT 
         u.id, u.nome, u.email, u.costo_orario, aa.data_assegnazione,
-        -- Ore lavorate da questa risorsa su questa attività
         COALESCE(SUM(
           CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL 
           THEN t.ore_effettive ELSE 0 END
         ), 0) as ore_lavorate,
-        -- Costo per questa risorsa
         COALESCE(SUM(
           CASE WHEN t.stato = 'completata' AND t.ore_effettive IS NOT NULL 
           THEN (t.ore_effettive::decimal / 60) * u.costo_orario ELSE 0 END
@@ -487,13 +611,11 @@ router.get('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
       ORDER BY aa.data_assegnazione ASC
     `, [id]);
 
-    // Ottieni task dell'attività
     const tasksResult = await query(`
       SELECT 
         t.id, t.nome, t.descrizione, t.ore_stimate, t.ore_effettive,
         t.scadenza, t.stato, t.data_creazione,
         u.nome as utente_nome, u.id as utente_id,
-        -- Performance task
         CASE 
           WHEN t.ore_effettive IS NOT NULL AND t.ore_stimate > 0 THEN 
             ROUND(((t.ore_effettive - t.ore_stimate)::decimal / t.ore_stimate) * 100, 1)
@@ -526,7 +648,6 @@ router.put('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
     const { id } = req.params;
     const { nome, descrizione, ore_stimate, scadenza, stato } = req.body;
 
-    // Verifica permessi
     let permissionCheck = '';
     let params = [id];
 
@@ -589,18 +710,16 @@ router.put('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
   }
 });
 
-// DELETE /api/activities/:id - Elimina attività (se non ha task completate)
+// DELETE /api/activities/:id - Elimina attività
 router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Solo manager può eliminare attività
     if (req.user.ruolo !== 'manager') {
       return res.status(403).json({ error: 'Access Denied', details: 'Manager role required' });
     }
 
     await transaction(async (client) => {
-      // Verifica se ha task completate
       const completedTasksResult = await client.query(`
         SELECT COUNT(*) FROM task WHERE attivita_id = $1 AND stato = 'completata'
       `, [id]);
@@ -609,13 +728,9 @@ router.delete('/:id', authenticateToken, validateUUID('id'), async (req, res) =>
         throw new Error('Cannot delete activity with completed tasks');
       }
 
-      // Rimuovi assegnazioni
       await client.query('DELETE FROM assegnazioni_attivita WHERE attivita_id = $1', [id]);
-
-      // Rimuovi task non completate
       await client.query('DELETE FROM task WHERE attivita_id = $1', [id]);
 
-      // Elimina attività
       const result = await client.query(`
         DELETE FROM attivita WHERE id = $1 RETURNING nome
       `, [id]);
