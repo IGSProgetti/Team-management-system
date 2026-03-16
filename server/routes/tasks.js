@@ -2,6 +2,7 @@ const express = require('express');
 const { query, transaction } = require('../config/database');
 const { authenticateToken, requireManager, requireResource } = require('../middleware/auth');
 const { validateTask, validateTaskCompletion, validateUUID, validatePagination } = require('../middleware/validation');
+const { sendEmail, taskAssegnataHtml, taskCompletataHtml } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -206,6 +207,37 @@ router.post('/', authenticateToken, requireResource, validateTask, async (req, r
       }
 
       console.log('🚀 Task creata con successo:', task.nome);
+
+      // 📧 Email alla risorsa assegnata
+      const assigneeEmailResult = await client.query(`
+        SELECT u.email
+        FROM utenti u
+        WHERE u.id = $1
+      `, [utente_assegnato]);
+
+      const taskInfoResult = await client.query(`
+        SELECT p.nome as progetto_nome, c.nome as cliente_nome
+        FROM attivita a
+        JOIN progetti p ON a.progetto_id = p.id
+        JOIN clienti c ON p.cliente_id = c.id
+        WHERE a.id = $1
+      `, [attivita_id]);
+
+      if (assigneeEmailResult.rows.length > 0) {
+        const { progetto_nome, cliente_nome } = taskInfoResult.rows[0] || {};
+        sendEmail({
+          to: assigneeEmailResult.rows[0].email,
+          subject: `📋 Nuova task assegnata: ${nome}`,
+          html: taskAssegnataHtml({
+            nomeUtente: userData.nome,
+            nomeTask: nome,
+            scadenza,
+            oreStimate: ore_stimate,
+            progetto: progetto_nome,
+            cliente: cliente_nome
+          })
+        });
+      }
 
       res.status(201).json({
         message: 'Task created successfully',
@@ -532,6 +564,36 @@ if (budgetTaskResult.rows.length > 0) {
         console.log('ℹ️  Nessuna configurazione task collegata trovata per questa task');
       }
 
+
+      // 📧 Email ai manager: task completata
+      const managersResult = await client.query(`
+        SELECT email FROM utenti WHERE ruolo IN ('manager', 'super_admin') AND attivo = true
+      `);
+
+      const completionInfoResult = await client.query(`
+        SELECT p.nome as progetto_nome, c.nome as cliente_nome
+        FROM task t
+        JOIN attivita a ON t.attivita_id = a.id
+        JOIN progetti p ON a.progetto_id = p.id
+        JOIN clienti c ON p.cliente_id = c.id
+        WHERE t.id = $1
+      `, [id]);
+
+      if (managersResult.rows.length > 0) {
+        const { progetto_nome, cliente_nome } = completionInfoResult.rows[0] || {};
+        const managerEmails = managersResult.rows.map(r => r.email).join(',');
+        sendEmail({
+          to: managerEmails,
+          subject: `✅ Task completata: ${task.nome}`,
+          html: taskCompletataHtml({
+            nomeRisorsa: task.utente_nome,
+            nomeTask: task.nome,
+            oreEffettive: task.ore_effettive,
+            progetto: progetto_nome,
+            cliente: cliente_nome
+          })
+        });
+      }
 
       res.json({
         message: 'Task completed successfully',

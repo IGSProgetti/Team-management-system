@@ -2,6 +2,7 @@ const express = require('express');
 const { query, transaction } = require('../config/database');
 const { authenticateToken, requireManager } = require('../middleware/auth');
 const { body, param, validationResult } = require('express-validator');
+const { sendEmail, bonusApprovatoHtml, bonusRifiutatoHtml } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -262,7 +263,29 @@ router.put('/:id/approva', authenticateToken, requireManager, param('id').isUUID
       JSON.stringify({ bonus_id: id, risorsa_id: bonusCheck.rows[0].risorsa_id })
     ]);
 
-    res.json({ 
+    // 📧 Email alla risorsa: bonus approvato
+    const risorsaResult = await query(`
+      SELECT u.email, u.nome, t.nome as task_nome
+      FROM utenti u
+      LEFT JOIN task t ON t.id = $2
+      WHERE u.id = $1
+    `, [bonusCheck.rows[0].risorsa_id, bonusCheck.rows[0].task_id]);
+
+    if (risorsaResult.rows.length > 0) {
+      const { email, nome, task_nome } = risorsaResult.rows[0];
+      sendEmail({
+        to: email,
+        subject: '🎉 Il tuo bonus è stato approvato',
+        html: bonusApprovatoHtml({
+          nomeUtente: nome,
+          importo: bonusCheck.rows[0].importo_bonus,
+          nomeTask: task_nome,
+          commento: commento
+        })
+      });
+    }
+
+    res.json({
       message: 'Bonus approvato con successo',
       bonus: result.rows[0]
     });
@@ -319,7 +342,29 @@ router.put('/:id/rifiuta', authenticateToken, requireManager, param('id').isUUID
       JSON.stringify({ bonus_id: id, risorsa_id: bonusCheck.rows[0].risorsa_id })
     ]);
 
-    res.json({ 
+    // 📧 Email alla risorsa: bonus rifiutato
+    const risorsaRifiutoResult = await query(`
+      SELECT u.email, u.nome, t.nome as task_nome
+      FROM utenti u
+      LEFT JOIN task t ON t.id = $2
+      WHERE u.id = $1
+    `, [bonusCheck.rows[0].risorsa_id, bonusCheck.rows[0].task_id]);
+
+    if (risorsaRifiutoResult.rows.length > 0) {
+      const { email, nome, task_nome } = risorsaRifiutoResult.rows[0];
+      sendEmail({
+        to: email,
+        subject: '❌ Il tuo bonus è stato rifiutato',
+        html: bonusRifiutatoHtml({
+          nomeUtente: nome,
+          importo: bonusCheck.rows[0].importo_bonus,
+          nomeTask: task_nome,
+          commento: commento
+        })
+      });
+    }
+
+    res.json({
       message: 'Bonus rifiutato',
       bonus: result.rows[0]
     });
