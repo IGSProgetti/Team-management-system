@@ -1,0 +1,46 @@
+name: team-management-system
+region: fra
+
+services:
+  - name: backend
+    source_dir: server
+    github:
+      branch: main
+      deploy_on_push: true
+    run_command: npm start
+    environment_slug: node-js
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    http_port: 5000
+    envs:
+      - key: NODE_ENV
+        value: "production"
+      - key: PORT
+        value: "5000"
+      - key: JWT_SECRET
+        value: "PLACEHOLDER"
+        type: SECRET
+      - key: DATABASE_URL
+        value: "PLACEHOLDER"
+        type: SECRET
+      - key: FRONTEND_URL
+        value: "PLACEHOLDER"
+
+static_sites:
+  - name: frontend
+    source_dir: client
+    github:
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    output_dir: build
+    envs:
+      - key: REACT_APP_API_URL
+        value: "PLACEHOLDER"
+
+databases:
+  - name: db
+    engine: PG
+    version: "14"
+    size: db-s-dev-database
+    num_nodes: 1
