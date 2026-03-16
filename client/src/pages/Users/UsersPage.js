@@ -536,6 +536,210 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
+// Component EditUserModal
+const EditUserModal = ({ isOpen, onClose, onSubmit, user: initialUser }) => {
+  const [formData, setFormData] = useState({});
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen && initialUser) {
+      setFormData({
+        nome: initialUser.nome || '',
+        email: initialUser.email || '',
+        ruolo: initialUser.ruolo || 'risorsa',
+        compenso_annuale: initialUser.compenso_annuale || '',
+        costo_orario_manuale: initialUser.costo_orario_manuale || false,
+        costo_orario: initialUser.costo_orario || '',
+        ore_disponibili_manuale: initialUser.ore_disponibili_manuale || false,
+        ore_disponibili_anno: initialUser.ore_disponibili_anno || ''
+      });
+      setErrors({});
+    }
+  }, [isOpen, initialUser]);
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.nome?.trim()) newErrors.nome = 'Il nome è obbligatorio';
+    if (!formData.email?.trim()) newErrors.email = "L'email è obbligatoria";
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Inserisci un'email valida";
+    if (!formData.compenso_annuale) newErrors.compenso_annuale = 'Il compenso annuale è obbligatorio';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        nome: formData.nome.trim(),
+        email: formData.email.trim(),
+        ruolo: formData.ruolo,
+        compenso_annuale: parseFloat(formData.compenso_annuale),
+        costo_orario_manuale: formData.costo_orario_manuale,
+        costo_orario: formData.costo_orario_manuale ? parseFloat(formData.costo_orario) : null,
+        ore_disponibili_manuale: formData.ore_disponibili_manuale,
+        ore_disponibili_anno: formData.ore_disponibili_manuale ? parseInt(formData.ore_disponibili_anno) : null
+      };
+      const response = await api.put(`/users/${initialUser.id}`, payload);
+      onClose();
+      if (onSubmit) onSubmit(response.data.user);
+    } catch (error) {
+      setErrors({ submit: error.response?.data?.details || 'Errore durante la modifica' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="p-6 pb-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Modifica Utente</h3>
+          <p className="text-sm text-gray-600 mt-1">{initialUser?.nome}</p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
+            <input
+              type="text" name="nome" value={formData.nome || ''} onChange={handleInputChange}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.nome ? 'border-red-300 bg-red-50' : 'border-gray-300'}`}
+              disabled={isSubmitting}
+            />
+            {errors.nome && <p className="text-sm text-red-600 mt-1">{errors.nome}</p>}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+            <input
+              type="email" name="email" value={formData.email || ''} onChange={handleInputChange}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'}`}
+              disabled={isSubmitting}
+            />
+            {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ruolo *</label>
+            <select
+              name="ruolo" value={formData.ruolo || 'risorsa'} onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isSubmitting}
+            >
+              <option value="risorsa">Risorsa</option>
+              <option value="manager">Manager</option>
+            </select>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Compenso Annuale * <span className="text-gray-500">(EUR)</span></label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">€</span>
+              <input
+                type="number" name="compenso_annuale" value={formData.compenso_annuale || ''} onChange={handleInputChange}
+                placeholder="35000" min="0" step="1000"
+                className={`w-full pl-8 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.compenso_annuale ? 'border-red-300 bg-red-50' : 'border-gray-300'}`}
+                disabled={isSubmitting}
+              />
+            </div>
+            {errors.compenso_annuale && <p className="text-sm text-red-600 mt-1">{errors.compenso_annuale}</p>}
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center mb-2">
+              <input
+                type="checkbox" id="edit_costo_orario_manuale" name="costo_orario_manuale"
+                checked={formData.costo_orario_manuale || false} onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded" disabled={isSubmitting}
+              />
+              <label htmlFor="edit_costo_orario_manuale" className="ml-2 text-sm text-gray-700">
+                Imposta costo orario manualmente
+              </label>
+            </div>
+            {formData.costo_orario_manuale && (
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">€</span>
+                <input
+                  type="number" name="costo_orario" value={formData.costo_orario || ''} onChange={handleInputChange}
+                  placeholder="25" min="0" step="0.5"
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
+            {!formData.costo_orario_manuale && (
+              <p className="text-xs text-gray-500">
+                Calcolato automaticamente: €{formData.compenso_annuale ? (parseFloat(formData.compenso_annuale) / 220 / 5).toFixed(2) : '0.00'}/h
+              </p>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <div className="flex items-center mb-2">
+              <input
+                type="checkbox" id="edit_ore_disponibili_manuale" name="ore_disponibili_manuale"
+                checked={formData.ore_disponibili_manuale || false} onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded" disabled={isSubmitting}
+              />
+              <label htmlFor="edit_ore_disponibili_manuale" className="ml-2 text-sm text-gray-700">
+                Imposta ore disponibili manualmente
+              </label>
+            </div>
+            {formData.ore_disponibili_manuale && (
+              <input
+                type="number" name="ore_disponibili_anno" value={formData.ore_disponibili_anno || ''} onChange={handleInputChange}
+                placeholder="1760" min="0" step="40"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isSubmitting}
+              />
+            )}
+            {!formData.ore_disponibili_manuale && (
+              <p className="text-xs text-gray-500">Standard: 1760h/anno (8h × 220 giorni)</p>
+            )}
+          </div>
+
+          {errors.submit && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{errors.submit}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              type="button" onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              disabled={isSubmitting}
+            >
+              Annulla
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Salvando...</>
+              ) : (
+                <><Edit className="w-4 h-4 mr-2" />Salva Modifiche</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // Main UsersPage Component
 const UsersPage = () => {
   const { user } = useAuth();
@@ -547,6 +751,9 @@ const UsersPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mostraDisattivati, setMostraDisattivati] = useState(false);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [userToEdit, setUserToEdit] = useState(null);
 
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -568,6 +775,17 @@ const UsersPage = () => {
   React.useEffect(() => {
     fetchUsers(mostraDisattivati);
   }, [mostraDisattivati]);
+
+  // Funzione per aprire il modal di modifica
+  const handleEdit = (user) => {
+    setUserToEdit(user);
+    setShowEditModal(true);
+  };
+
+  // Aggiorna utente nella lista dopo modifica
+  const handleUserUpdated = (updatedUser) => {
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
+  };
 
   // Funzione per aprire il modal di conferma
   const handleDeactivate = (user) => {
@@ -776,7 +994,7 @@ const UsersPage = () => {
               key={user.id}
               user={user}
               onView={(user) => console.log('View:', user)}
-              onEdit={(user) => console.log('Edit:', user)}
+              onEdit={handleEdit}
               onDeactivate={handleDeactivate}
               onReactivate={handleReactivate}
             />
@@ -809,10 +1027,20 @@ const UsersPage = () => {
 
       {/* Modal Creazione Utente */}
       {showCreateModal && (
-        <CreateUserModal 
+        <CreateUserModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleUserCreated}
+        />
+      )}
+
+      {/* Modal Modifica Utente */}
+      {showEditModal && (
+        <EditUserModal
+          isOpen={showEditModal}
+          user={userToEdit}
+          onClose={() => { setShowEditModal(false); setUserToEdit(null); }}
+          onSubmit={handleUserUpdated}
         />
       )}
 
