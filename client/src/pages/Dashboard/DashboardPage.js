@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import { 
   Calendar, 
   CheckSquare, 
@@ -25,31 +25,12 @@ import {
   getStatusText
 } from '../../utils/helpers';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
-
-// Configurazione axios con auth
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-// Interceptor per aggiungere token
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
 // Helper per date mensili
 const getCurrentMonthDates = () => {
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   firstDay.setHours(0, 0, 0, 0);
-  
+
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   lastDay.setHours(23, 59, 59, 999);
   
@@ -84,7 +65,7 @@ const DashboardPage = () => {
       setError(null);
 
       // 1. Fetch user info
-      const userResponse = await apiClient.get('/api/users/profile');
+      const userResponse = await api.get('/users/profile');
       setUser(userResponse.data.user);
 
       // 2. Fetch week tasks (per la sezione task)
@@ -100,7 +81,7 @@ const DashboardPage = () => {
         scadenza_a: weekDates.end.toISOString()
       };
       
-      const weekResponse = await apiClient.get('/api/tasks', { params: weekParams });
+      const weekResponse = await api.get('/tasks', { params: weekParams });
       setWeekTasks(weekResponse.data.tasks || []);
 
       // 3. Fetch month tasks (per ore mensili)
@@ -110,7 +91,7 @@ const DashboardPage = () => {
         scadenza_a: monthDates.end.toISOString()
       };
       
-      const monthResponse = await apiClient.get('/api/tasks', { params: monthParams });
+      const monthResponse = await api.get('/tasks', { params: monthParams });
       setMonthTasks(monthResponse.data.tasks || []);
 
       // 4. FETCH BONUS REALI DAL DATABASE
@@ -119,7 +100,7 @@ const DashboardPage = () => {
         data_a: monthDates.end.toISOString()
       };
       
-      const bonusResponse = await apiClient.get('/api/budget-control-advanced/overview', { 
+      const bonusResponse = await api.get('/budget-control-advanced/overview', {
         params: bonusParams 
       });
       
