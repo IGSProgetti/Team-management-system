@@ -43,7 +43,7 @@ const getRoleBadge = (ruolo) => {
 };
 
 // Component UserCard
-const UserCard = ({ user, onEdit, onView, onDeactivate }) => {
+const UserCard = ({ user, onEdit, onView, onDeactivate, onReactivate }) => {
   const [showMenu, setShowMenu] = useState(false);
 
   const costoOrarioDisplay = user.costo_orario_manuale ? 
@@ -51,8 +51,9 @@ const UserCard = ({ user, onEdit, onView, onDeactivate }) => {
     `${formatCurrency(user.costo_orario)}/h (auto)`;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 
-                    hover:border-gray-300 group cursor-pointer">
+    <div className={`bg-white rounded-xl border p-6 hover:shadow-lg transition-all duration-200 hover:border-gray-300 group cursor-pointer ${
+      user.attivo === false ? 'border-red-200 opacity-70' : 'border-gray-200'
+    }`}>
       
       {/* Header con nome e ruolo */}
       <div className="flex items-start justify-between mb-4">
@@ -91,13 +92,23 @@ const UserCard = ({ user, onEdit, onView, onDeactivate }) => {
                   <Edit className="w-4 h-4 mr-3" />
                   Modifica
                 </button>
-                <button
-                  onClick={() => { onDeactivate(user); setShowMenu(false); }}
-                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4 mr-3" />
-                  Disattiva
-                </button>
+                {user.attivo === false ? (
+                  <button
+                    onClick={() => { onReactivate(user); setShowMenu(false); }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                  >
+                    <UserCheck className="w-4 h-4 mr-3" />
+                    Riattiva
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { onDeactivate(user); setShowMenu(false); }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4 mr-3" />
+                    Disattiva
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -525,7 +536,7 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
-// Main UsersPage Component  
+// Main UsersPage Component
 const UsersPage = () => {
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -535,16 +546,44 @@ const UsersPage = () => {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mostraDisattivati, setMostraDisattivati] = useState(false);
 
-  // ✅ AGGIUNGI QUESTE 3 RIGHE QUI ✅
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
+
+  // Fetch utenti da API
+  const fetchUsers = async (includi_disattivati = false) => {
+    try {
+      const params = includi_disattivati ? { includi_disattivati: 'true' } : {};
+      const response = await api.get('/users', { params });
+      setUsers(response.data.users || []);
+    } catch (error) {
+      console.error('Errore fetch utenti:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchUsers(mostraDisattivati);
+  }, [mostraDisattivati]);
 
   // Funzione per aprire il modal di conferma
   const handleDeactivate = (user) => {
     setSelectedUser(user);
     setShowDeactivateModal(true);
+  };
+
+  // Funzione per riattivare un utente
+  const handleReactivate = async (userToReactivate) => {
+    try {
+      await api.put(`/users/${userToReactivate.id}/riattiva`);
+      fetchUsers(mostraDisattivati);
+    } catch (error) {
+      console.error('Errore riattivazione:', error);
+      alert(error.response?.data?.details || 'Errore durante la riattivazione');
+    }
   };
 
   // Funzione per confermare la disattivazione
@@ -555,16 +594,10 @@ const UsersPage = () => {
 
     try {
       await api.delete(`/users/${selectedUser.id}`);
-      
-      // Rimuovi l'utente dalla lista
+
       setUsers(prevUsers => prevUsers.filter(u => u.id !== selectedUser.id));
-      
-      // Chiudi modal
       setShowDeactivateModal(false);
       setSelectedUser(null);
-
-      // Notifica successo (opzionale)
-      console.log(`✅ Utente ${selectedUser.nome} disattivato`);
 
     } catch (error) {
       console.error('Errore disattivazione:', error);
@@ -573,26 +606,6 @@ const UsersPage = () => {
       setIsDeactivating(false);
     }
   };
-
-  // Fetch utenti da API
-  React.useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        // ✅ USA api.js
-        const response = await api.get('/users');
-        
-        console.log('Utenti caricati:', response.data.users);
-        setUsers(response.data.users || []);
-      } catch (error) {
-        console.error('Errore fetch utenti:', error);
-        // Nessun fallback per gli utenti - è una pagina manager only
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
 
   // Solo manager può accedere
   if (user?.ruolo !== 'manager') {
@@ -645,14 +658,27 @@ const UsersPage = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg 
-                   hover:bg-blue-700 transition-colors font-medium"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nuovo Utente
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMostraDisattivati(prev => !prev)}
+            className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium border ${
+              mostraDisattivati
+                ? 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
+                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            {mostraDisattivati ? 'Nascondi disattivati' : 'Mostra disattivati'}
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg
+                     hover:bg-blue-700 transition-colors font-medium"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nuovo Utente
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -746,12 +772,13 @@ const UsersPage = () => {
       {filteredUsers.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredUsers.map((user) => (
-            <UserCard 
-              key={user.id} 
+            <UserCard
+              key={user.id}
               user={user}
               onView={(user) => console.log('View:', user)}
               onEdit={(user) => console.log('Edit:', user)}
               onDeactivate={handleDeactivate}
+              onReactivate={handleReactivate}
             />
           ))}
         </div>

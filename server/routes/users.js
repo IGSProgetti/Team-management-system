@@ -8,26 +8,32 @@ const router = express.Router();
 // GET /api/users - Lista tutti gli utenti (solo manager)
 router.get('/', authenticateToken, requireManager, validatePagination, async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'nome', order = 'asc', ruolo } = req.query;
+    const { page = 1, limit = 20, sort = 'nome', order = 'asc', ruolo, includi_disattivati } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereClause = 'WHERE attivo = true';
+    let conditions = [];
     let params = [];
-    
-    if (ruolo && ['risorsa', 'manager'].includes(ruolo)) {
-      whereClause += ' AND ruolo = $1';
-      params.push(ruolo);
+
+    if (includi_disattivati !== 'true') {
+      conditions.push('attivo = true');
     }
+
+    if (ruolo && ['risorsa', 'manager'].includes(ruolo)) {
+      params.push(ruolo);
+      conditions.push(`ruolo = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await query(`SELECT COUNT(*) FROM utenti ${whereClause}`, params);
     const totalUsers = parseInt(countResult.rows[0].count);
 
     const result = await query(`
-      SELECT 
+      SELECT
         id, nome, email, ruolo, compenso_annuale, costo_orario,
         ore_disponibili_anno, costo_orario_manuale, ore_disponibili_manuale,
-        data_creazione, data_aggiornamento
-      FROM utenti 
+        attivo, data_creazione, data_aggiornamento
+      FROM utenti
       ${whereClause}
       ORDER BY ${sort} ${order.toUpperCase()}
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
@@ -353,6 +359,39 @@ router.delete('/:id', authenticateToken, requireManager, validateUUID('id'), asy
     res.status(500).json({
       error: 'Server Error',
       details: 'Failed to deactivate user'
+    });
+  }
+});
+
+// PUT /api/users/:id/riattiva - Riattiva utente disattivato (solo manager)
+router.put('/:id/riattiva', authenticateToken, requireManager, validateUUID('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await query(`
+      UPDATE utenti
+      SET attivo = true, data_aggiornamento = CURRENT_TIMESTAMP
+      WHERE id = $1 AND attivo = false
+      RETURNING id, nome, email, attivo
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Not Found',
+        details: 'User not found or already active'
+      });
+    }
+
+    res.json({
+      message: 'User reactivated successfully',
+      user: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Reactivate user error:', error);
+    res.status(500).json({
+      error: 'Server Error',
+      details: 'Failed to reactivate user'
     });
   }
 });
