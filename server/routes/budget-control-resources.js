@@ -593,6 +593,16 @@ else if (tipo_assegnazione === 'task' && task_id) {
   risultato = { tipo: 'task', task_id };
 }
 
+    // Scala le ore dal tesoretto se il monte è tesoretto
+    if (tipo_monte === 'tesoretto') {
+      await query(`
+        UPDATE utenti
+        SET ore_annue_tesoretto = ore_annue_tesoretto - $1
+        WHERE id = $2
+      `, [ore_da_assegnare, risorsa_id]);
+      console.log(`💼 Tesoretto scalato: -${ore_da_assegnare}h per risorsa ${risorsa_id}`);
+    }
+
     console.log(`✅ Assegnazione completata!`);
 
     res.json({
