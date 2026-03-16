@@ -34,3 +34,7 @@ complete-server*.js
 enhanced-server.js
 working-server.js
 simple-server.js
+backup_completo.sql
+backup_pre_migration_*.sql
+complete_database_schema.sql
+migration_*.sql
