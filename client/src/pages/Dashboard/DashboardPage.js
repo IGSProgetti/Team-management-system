@@ -104,10 +104,16 @@ const DashboardPage = () => {
         params: bonusParams 
       });
       
-      // Filtra solo i bonus della risorsa loggata
-      const myBonus = bonusResponse.data.task?.filter(
-        t => t.utente_assegnato === userResponse.data.user.id && t.bonus_id
-      ) || [];
+      // Per manager/super_admin: tutti i bonus del team
+      // Per risorse/coordinatori: solo i propri bonus
+      const currentUser = userResponse.data.user;
+      const isManager = ['manager', 'super_admin'].includes(currentUser.ruolo);
+
+      const myBonus = bonusResponse.data.task?.filter(t => {
+        if (!t.bonus_id) return false;                          // escludi task senza bonus
+        if (isManager) return true;                             // manager vede tutto il team
+        return t.utente_assegnato === currentUser.id;           // risorsa vede solo i suoi
+      }) || [];
       
       setMonthBonus(myBonus);
 
