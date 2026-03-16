@@ -100,9 +100,9 @@ const BudgetControlDashboard = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Budget Control - Gestione Risorse</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Budget Control - Gestione Risorse</h1>
             <p className="text-gray-600 mt-1">
               Monitora il monte ore e le performance delle risorse
             </p>

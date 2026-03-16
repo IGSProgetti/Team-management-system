@@ -144,7 +144,7 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-green-100">
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Riassegnazione Ore</h3>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Riassegnazione Ore</h3>
               <p className="text-green-600 font-medium">
                 Step {currentStep} di 4 - Compensa Eccedenze con Risparmi
               </p>
@@ -165,14 +165,14 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
                     {step}
                   </div>
                   {step < 4 && (
-                    <div className={`w-16 h-1 mx-2 ${
+                    <div className={`w-8 sm:w-16 h-1 mx-1 sm:mx-2 ${
                       step < currentStep ? 'bg-green-500' : 'bg-gray-300'
                     }`} />
                   )}
                 </div>
               ))}
             </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-600">
+            <div className="hidden sm:flex justify-between mt-2 text-xs text-gray-600">
               <span>Seleziona Credito</span>
               <span>Imposta Minuti</span>
               <span>Scegli Destinazione</span>
@@ -370,7 +370,7 @@ const RiassegnazioneWizard = ({ isOpen, onClose, initialResource = null }) => {
                 <h4 className="text-lg font-semibold">Conferma Riassegnazione</h4>
                 
                 <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="flex-1 p-3 bg-green-100 rounded-lg">
                       <p className="text-sm text-gray-600">DA (Credito):</p>
                       <p className="font-semibold">{selectedCredito?.task_nome}</p>

@@ -170,9 +170,9 @@ const RiassegnazioniStorico = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Storico Gestione Bonus</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Storico Gestione Bonus</h1>
           <p className="text-gray-600 mt-1">
             Visualizza tutti i bonus e penalità gestiti ({totalBonus} totali)
           </p>
@@ -193,7 +193,7 @@ const RiassegnazioniStorico = () => {
           <h3 className="text-lg font-semibold text-gray-900">Filtri</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {/* Tipo */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -474,7 +474,7 @@ const RiassegnazioniStorico = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-sm text-gray-700">
               Pagina {currentPage} di {totalPages} ({totalBonus} totali)
             </div>
@@ -532,11 +532,11 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Risorsa</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Nome:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.risorsa.nome}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Email:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.risorsa.email}</span>
                     </div>
@@ -547,19 +547,19 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Task Originale</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Nome:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.task.nome}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Cliente:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.cliente.nome}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Progetto:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.progetto.nome}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Attività:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.attivita.nome}</span>
                     </div>
@@ -570,15 +570,15 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Calcoli Ore</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Ore Stimate:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.ore_stimate_ore}h</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Ore Effettive:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.ore_effettive_ore}h</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Differenza:</span>
                       <span className={`text-sm font-bold ${
                         parseFloat(selectedBonus.differenza_ore_ore) > 0 ? 'text-green-600' : 
@@ -595,21 +595,21 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Calcoli Economici</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Tipo:</span>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTipoBadge(selectedBonus.tipo)}`}>
                         {getTipoLabel(selectedBonus.tipo)}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Percentuale Bonus:</span>
                       <span className="text-sm font-medium text-gray-900">{selectedBonus.percentuale_bonus}%</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Costo Orario Base:</span>
                       <span className="text-sm font-medium text-gray-900">{formatCurrency(selectedBonus.costo_orario_base)}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Costo Orario Finale:</span>
                       <span className="text-sm font-medium text-gray-900">{formatCurrency(selectedBonus.costo_orario_finale)}</span>
                     </div>
@@ -630,18 +630,18 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Gestione</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Azione:</span>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getAzioneBadge(selectedBonus.stato_gestione)}`}>
                         {selectedBonus.azione_descrizione}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Data Gestione:</span>
                       <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_gestione)}</span>
                     </div>
                     {selectedBonus.manager && (
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-2 flex-wrap">
                         <span className="text-sm text-gray-600">Gestito Da:</span>
                         <span className="text-sm font-medium text-gray-900">{selectedBonus.manager.nome}</span>
                       </div>
@@ -660,11 +660,11 @@ const RiassegnazioniStorico = () => {
                   <div>
                     <h4 className="text-sm font-semibold text-gray-700 mb-3">Task di Recupero</h4>
                     <div className="bg-purple-50 rounded-lg p-4 space-y-2">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-2 flex-wrap">
                         <span className="text-sm text-gray-600">Nome:</span>
                         <span className="text-sm font-medium text-gray-900">{selectedBonus.task_recupero.nome}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-2 flex-wrap">
                         <span className="text-sm text-gray-600">Stato:</span>
                         <span className="text-sm font-medium text-gray-900">{selectedBonus.task_recupero.stato}</span>
                       </div>
@@ -676,17 +676,17 @@ const RiassegnazioniStorico = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Timeline</h4>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Creazione:</span>
                       <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_creazione)}</span>
                     </div>
                     {selectedBonus.data_approvazione && (
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-2 flex-wrap">
                         <span className="text-sm text-gray-600">Approvazione:</span>
                         <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_approvazione)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2 flex-wrap">
                       <span className="text-sm text-gray-600">Gestione:</span>
                       <span className="text-sm font-medium text-gray-900">{formatDate(selectedBonus.data_gestione)}</span>
                     </div>
